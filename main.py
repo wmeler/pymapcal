@@ -1145,7 +1145,12 @@ class MainWindow(QMainWindow):
         help_menu.addAction(show_readme)
 
     def show_readme_help(self) -> None:
-        readme_path = Path(__file__).resolve().parent / "README.md"
+        base = Path(__file__).resolve().parent
+        if self.lang == "en":
+            preferred = base / "README.en.md"
+        else:
+            preferred = base / "README.pl.md"
+        readme_path = preferred if preferred.exists() else (base / "README.md")
         if not readme_path.exists():
             QMessageBox.warning(self, self.tr("help_title"), self.tr("help_missing_readme"))
             return
