@@ -1,0 +1,19 @@
+{
+  "language": "en",
+  "display": {
+    "outline_width": 1,
+    "outline_selected_width": 2,
+    "draft_outline_width": 2,
+    "crosshair_arm_corner": 14,
+    "crosshair_arm_cal": 12,
+    "crosshair_ring_corner": 4,
+    "crosshair_ring_cal": 2,
+    "crosshair_selected_arm_bonus": 4,
+    "crosshair_selected_ring_bonus": 2,
+    "cursor_guide_width": 2,
+    "cursor_guide_alpha": 200,
+    "cursor_guide_dash": 10,
+    "cursor_guide_gap": 6,
+    "cursor_guide_color": "#FFD84D"
+  }
+}
