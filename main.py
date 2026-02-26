@@ -12,6 +12,7 @@ from PySide6.QtCore import QEvent, QPointF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QMouseEvent, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
+    QSpinBox,
     QTextBrowser,
     QTreeWidget,
     QTreeWidgetItem,
@@ -46,9 +48,12 @@ TRANSLATIONS = {
         "btn_close_sheet": "Zamknij arkusz",
         "btn_cancel_drawing": "Anuluj rysowanie",
         "btn_add_cal_point": "Dodaj punkt kalibracyjny",
+        "btn_add_outline_point": "Dodaj punkt obrysu",
         "btn_select_mode": "Tryb wyboru",
         "btn_delete_sheet": "Usuń zaznaczony arkusz",
+        "btn_delete_point": "Usuń zaznaczony punkt",
         "btn_use_as_corner": "Dodaj punkt kalibracji do obrysu",
+        "btn_save_point": "Zapisz punkt",
         "btn_zoom_in": "Zoom +",
         "btn_zoom_out": "Zoom -",
         "btn_zoom_reset": "Zoom 100%",
@@ -56,12 +61,17 @@ TRANSLATIONS = {
         "panel_sheet_meta": "Metadane arkusza",
         "field_name": "Nazwa",
         "field_scale": "Skala",
-        "panel_point_geo": "Punkt (lon/lat)",
+        "field_lat": "Lat",
+        "field_lon": "Lon",
+        "panel_point_geo": "Punkt (lat/lon)",
         "menu_file": "Plik",
-        "menu_open_scan": "Otwórz skan mapy",
+        "menu_open_scan": "Dodaj skan mapy",
         "menu_save": "Zapisz",
         "menu_save_as": "Zapisz jako...",
-        "menu_load_project": "Wczytaj projekt",
+        "menu_load_project": "Wczytaj album",
+        "menu_import_map": "Importuj MAP...",
+        "menu_settings": "Ustawienia",
+        "menu_edit_settings": "Edytuj ustawienia...",
         "menu_help": "Pomoc",
         "menu_readme": "README",
         "help_title": "Pomoc",
@@ -76,6 +86,7 @@ TRANSLATIONS = {
         "link_point_question": "Dociągnąć obrys kadrowania do zaznaczonego punktu kalibracji?",
         "tree_crop_outline": "Obrys kadrowania",
         "tree_cal_points": "Punkty kalibracyjne",
+        "tree_scan_item": "Skan: {name}",
         "tree_sheet_item": "{name} ({count} pkt)",
         "tree_corner_item": "Narożnik {n}: x={x:.1f}, y={y:.1f}",
         "tree_point_item": "Punkt {n}: x={x:.1f}, y={y:.1f}",
@@ -83,17 +94,57 @@ TRANSLATIONS = {
         "error_lon_format_msg": "Nie udało się odczytać długości geograficznej. Obsługiwane: DD, DMM, DMS + półkula (E/W).",
         "error_lat_format_title": "Błąd formatu lat",
         "error_lat_format_msg": "Nie udało się odczytać szerokości geograficznej. Obsługiwane: DD, DMM, DMS + półkula (N/S).",
+        "error_point_not_selected": "Najpierw zaznacz punkt do edycji.",
+        "error_point_save_title": "Błąd zapisu punktu",
+        "error_point_save_msg": "Popraw błędne współrzędne i zapisz ponownie.",
+        "unsaved_point_title": "Niezapisane zmiany punktu",
+        "unsaved_point_msg": "Punkt ma niezapisane zmiany. Co zrobić?",
+        "status_grid_hint": "Siatka pojawi się po zapisaniu min. 2 punktów z poprawnym Lat/Lon.",
         "dialog_pick_scan": "Wybierz skan mapy",
         "dialog_image_filter": "Image (*.tif *.tiff *.bmp *.png *.jpg *.jpeg)",
         "error_open_image": "Nie udało się otworzyć obrazu.",
         "dialog_save_as": "Zapisz projekt jako",
         "dialog_project_filter": "MapCal Project (*.json)",
         "default_project_name": "projekt.json",
-        "dialog_load_project": "Wczytaj projekt",
+        "dialog_load_project": "Wczytaj album",
+        "dialog_import_map": "Importuj pliki MAP",
+        "dialog_map_filter": "Ozi Map (*.map)",
         "error_load_project": "Nie udało się wczytać projektu:\n{error}",
         "error_open_project_image": "Nie udało się otworzyć obrazu zapisanego w projekcie.",
         "warning_title": "Uwaga",
+        "confirm_title": "Potwierdzenie",
         "warning_missing_project_image": "Brak obrazu z projektu. Wczytano tylko dane arkuszy.",
+        "warning_missing_scan_image": "Brak pliku skanu: {path}",
+        "confirm_delete_sheet": "Usunąć zaznaczony arkusz?",
+        "confirm_delete_point": "Usunąć zaznaczony punkt?",
+        "confirm_delete_sheet_named": "Usunąć arkusz \"{name}\"?",
+        "confirm_delete_point_named": "Usunąć punkt {kind} #{index}?",
+        "point_kind_outline": "obrysu",
+        "point_kind_calibration": "kalibracyjny",
+        "import_summary_title": "Import MAP",
+        "import_summary": "Zaimportowano: {ok}\nBłędy: {fail}",
+        "settings_dialog_title": "Ustawienia programu",
+        "settings_field_language": "Język",
+        "settings_lang_pl": "Polski",
+        "settings_lang_en": "English",
+        "settings_field_outline_width": "Grubość obrysu",
+        "settings_field_outline_selected_width": "Grubość obrysu (zaznaczony)",
+        "settings_field_draft_outline_width": "Grubość obrysu roboczego",
+        "settings_field_crosshair_arm_corner": "Celownik obrysu: długość ramienia",
+        "settings_field_crosshair_arm_cal": "Celownik kalibracji: długość ramienia",
+        "settings_field_crosshair_ring_corner": "Celownik obrysu: promień środka",
+        "settings_field_crosshair_ring_cal": "Celownik kalibracji: promień środka",
+        "settings_field_crosshair_selected_arm_bonus": "Celownik zaznaczony: +ramię",
+        "settings_field_crosshair_selected_ring_bonus": "Celownik zaznaczony: +promień",
+        "settings_field_cursor_guide_width": "Linie kursora: grubość",
+        "settings_field_cursor_guide_alpha": "Linie kursora: przezroczystość",
+        "settings_field_cursor_guide_dash": "Linie kursora: długość kreski",
+        "settings_field_cursor_guide_gap": "Linie kursora: odstęp kresek",
+        "settings_field_cursor_guide_color": "Linie kursora: kolor (#RRGGBB)",
+        "settings_save_ok": "Ustawienia zapisane do: {path}",
+        "settings_save_error": "Nie udało się zapisać ustawień:\n{error}",
+        "settings_invalid_color": "Niepoprawny kolor. Użyj formatu #RRGGBB.",
+        "settings_lang_restart_hint": "Zmiana języka będzie w pełni widoczna po ponownym uruchomieniu aplikacji.",
     },
     "en": {
         "settings_json_object": ".pymapcal must be a JSON object.",
@@ -108,9 +159,12 @@ TRANSLATIONS = {
         "btn_close_sheet": "Close sheet",
         "btn_cancel_drawing": "Cancel drawing",
         "btn_add_cal_point": "Add calibration point",
+        "btn_add_outline_point": "Add outline point",
         "btn_select_mode": "Select mode",
         "btn_delete_sheet": "Delete selected sheet",
+        "btn_delete_point": "Delete selected point",
         "btn_use_as_corner": "Use calibration point in crop outline",
+        "btn_save_point": "Save point",
         "btn_zoom_in": "Zoom +",
         "btn_zoom_out": "Zoom -",
         "btn_zoom_reset": "Zoom 100%",
@@ -118,12 +172,17 @@ TRANSLATIONS = {
         "panel_sheet_meta": "Sheet metadata",
         "field_name": "Name",
         "field_scale": "Scale",
-        "panel_point_geo": "Point (lon/lat)",
+        "field_lat": "Lat",
+        "field_lon": "Lon",
+        "panel_point_geo": "Point (lat/lon)",
         "menu_file": "File",
-        "menu_open_scan": "Open map scan",
+        "menu_open_scan": "Add map scan",
         "menu_save": "Save",
         "menu_save_as": "Save as...",
-        "menu_load_project": "Load project",
+        "menu_load_project": "Load album",
+        "menu_import_map": "Import MAP...",
+        "menu_settings": "Settings",
+        "menu_edit_settings": "Edit settings...",
         "menu_help": "Help",
         "menu_readme": "README",
         "help_title": "Help",
@@ -138,6 +197,7 @@ TRANSLATIONS = {
         "link_point_question": "Snap crop outline to selected calibration point?",
         "tree_crop_outline": "Crop outline",
         "tree_cal_points": "Calibration points",
+        "tree_scan_item": "Scan: {name}",
         "tree_sheet_item": "{name} ({count} pt)",
         "tree_corner_item": "Corner {n}: x={x:.1f}, y={y:.1f}",
         "tree_point_item": "Point {n}: x={x:.1f}, y={y:.1f}",
@@ -145,17 +205,57 @@ TRANSLATIONS = {
         "error_lon_format_msg": "Failed to parse longitude. Supported: DD, DMM, DMS + hemisphere (E/W).",
         "error_lat_format_title": "Lat format error",
         "error_lat_format_msg": "Failed to parse latitude. Supported: DD, DMM, DMS + hemisphere (N/S).",
+        "error_point_not_selected": "Select a point first.",
+        "error_point_save_title": "Point save error",
+        "error_point_save_msg": "Fix invalid coordinates and save again.",
+        "unsaved_point_title": "Unsaved point changes",
+        "unsaved_point_msg": "Point has unsaved changes. What do you want to do?",
+        "status_grid_hint": "Grid appears after saving at least 2 points with valid Lat/Lon.",
         "dialog_pick_scan": "Select map scan",
         "dialog_image_filter": "Image (*.tif *.tiff *.bmp *.png *.jpg *.jpeg)",
         "error_open_image": "Failed to open image.",
         "dialog_save_as": "Save project as",
         "dialog_project_filter": "MapCal Project (*.json)",
         "default_project_name": "project.json",
-        "dialog_load_project": "Load project",
+        "dialog_load_project": "Load album",
+        "dialog_import_map": "Import MAP files",
+        "dialog_map_filter": "Ozi Map (*.map)",
         "error_load_project": "Failed to load project:\n{error}",
         "error_open_project_image": "Failed to open image stored in project.",
         "warning_title": "Warning",
+        "confirm_title": "Confirmation",
         "warning_missing_project_image": "Project image is missing. Loaded only sheet data.",
+        "warning_missing_scan_image": "Missing scan file: {path}",
+        "confirm_delete_sheet": "Delete selected sheet?",
+        "confirm_delete_point": "Delete selected point?",
+        "confirm_delete_sheet_named": "Delete sheet \"{name}\"?",
+        "confirm_delete_point_named": "Delete {kind} point #{index}?",
+        "point_kind_outline": "outline",
+        "point_kind_calibration": "calibration",
+        "import_summary_title": "MAP import",
+        "import_summary": "Imported: {ok}\nFailed: {fail}",
+        "settings_dialog_title": "Application settings",
+        "settings_field_language": "Language",
+        "settings_lang_pl": "Polish",
+        "settings_lang_en": "English",
+        "settings_field_outline_width": "Outline width",
+        "settings_field_outline_selected_width": "Outline width (selected)",
+        "settings_field_draft_outline_width": "Draft outline width",
+        "settings_field_crosshair_arm_corner": "Outline crosshair: arm length",
+        "settings_field_crosshair_arm_cal": "Calibration crosshair: arm length",
+        "settings_field_crosshair_ring_corner": "Outline crosshair: center radius",
+        "settings_field_crosshair_ring_cal": "Calibration crosshair: center radius",
+        "settings_field_crosshair_selected_arm_bonus": "Selected crosshair: +arm",
+        "settings_field_crosshair_selected_ring_bonus": "Selected crosshair: +radius",
+        "settings_field_cursor_guide_width": "Cursor guides: width",
+        "settings_field_cursor_guide_alpha": "Cursor guides: alpha",
+        "settings_field_cursor_guide_dash": "Cursor guides: dash length",
+        "settings_field_cursor_guide_gap": "Cursor guides: dash gap",
+        "settings_field_cursor_guide_color": "Cursor guides: color (#RRGGBB)",
+        "settings_save_ok": "Settings saved to: {path}",
+        "settings_save_error": "Failed to save settings:\n{error}",
+        "settings_invalid_color": "Invalid color. Use #RRGGBB format.",
+        "settings_lang_restart_hint": "Language change is fully applied after restarting the app.",
     },
 }
 
@@ -226,6 +326,35 @@ class Sheet:
 
 
 @dataclass
+class Scan:
+    name: str
+    image_path: str
+    sheets: list[Sheet] = field(default_factory=list)
+
+    def to_json(self) -> dict:
+        return {
+            "name": self.name,
+            "image_path": self.image_path,
+            "sheets": [s.to_json() for s in self.sheets],
+        }
+
+    @staticmethod
+    def from_json(data: dict) -> "Scan":
+        return Scan(
+            name=data.get("name", ""),
+            image_path=str(data.get("image_path", "")),
+            sheets=[Sheet.from_json(s) for s in data.get("sheets", [])],
+        )
+
+
+@dataclass
+class MapImportEntry:
+    scan_name: str
+    image_path: str
+    sheet: Sheet
+
+
+@dataclass
 class DisplaySettings:
     outline_width: int = 1
     outline_selected_width: int = 2
@@ -276,6 +405,24 @@ class DisplaySettings:
             cursor_guide_gap=cls._int_value(data, "cursor_guide_gap", 6, 1, 80),
             cursor_guide_color=cls._str_value(data, "cursor_guide_color", "#FFD84D"),
         )
+
+    def to_dict(self) -> dict:
+        return {
+            "outline_width": self.outline_width,
+            "outline_selected_width": self.outline_selected_width,
+            "draft_outline_width": self.draft_outline_width,
+            "crosshair_arm_corner": self.crosshair_arm_corner,
+            "crosshair_arm_cal": self.crosshair_arm_cal,
+            "crosshair_ring_corner": self.crosshair_ring_corner,
+            "crosshair_ring_cal": self.crosshair_ring_cal,
+            "crosshair_selected_arm_bonus": self.crosshair_selected_arm_bonus,
+            "crosshair_selected_ring_bonus": self.crosshair_selected_ring_bonus,
+            "cursor_guide_width": self.cursor_guide_width,
+            "cursor_guide_alpha": self.cursor_guide_alpha,
+            "cursor_guide_dash": self.cursor_guide_dash,
+            "cursor_guide_gap": self.cursor_guide_gap,
+            "cursor_guide_color": self.cursor_guide_color,
+        }
 
 
 def load_display_settings() -> tuple[DisplaySettings, str, Optional[Path], Optional[str]]:
@@ -484,6 +631,130 @@ def format_dmm(value: float, kind: str) -> str:
     return f"{deg:0{deg_width}d} {minutes:06.3f} {hemi}"
 
 
+def _hemisphere_sign(h: str) -> float:
+    up = h.strip().upper()
+    if up in ("S", "W"):
+        return -1.0
+    return 1.0
+
+
+def _parse_dmm_fields(deg_text: str, min_text: str, hemi_text: str) -> Optional[float]:
+    try:
+        deg = abs(float(deg_text.strip()))
+        minutes = float(min_text.strip())
+    except ValueError:
+        return None
+    if minutes < 0 or minutes >= 60:
+        return None
+    return _hemisphere_sign(hemi_text) * (deg + minutes / 60.0)
+
+
+def _split_map_line(line: str) -> list[str]:
+    return [part.strip() for part in line.strip().split(",")]
+
+
+def _resolve_scan_path_from_map(map_path: Path, image_line: str, path_line: str) -> Path:
+    candidates: list[Path] = []
+    if image_line:
+        candidates.append(map_path.parent / image_line)
+    if path_line:
+        normalized = path_line.replace("\\", "/").strip()
+        candidates.append(Path(normalized))
+        candidates.append(map_path.parent / Path(normalized).name)
+    for c in candidates:
+        if c.exists():
+            return c
+    if candidates:
+        return candidates[0]
+    return map_path.with_suffix(".bmp")
+
+
+def parse_ozi_map_file(map_path: Path) -> Optional[MapImportEntry]:
+    try:
+        lines = map_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    if len(lines) < 3:
+        return None
+    if not lines[0].startswith("OziExplorer Map Data File"):
+        return None
+
+    image_line = lines[1].strip()
+    path_line = lines[2].strip()
+    scan_path = _resolve_scan_path_from_map(map_path, image_line, path_line)
+    scan_name = map_path.stem
+
+    sheet = Sheet(name=map_path.stem or "Sheet")
+    boundary_xy: dict[int, tuple[float, float]] = {}
+    boundary_geo: dict[int, tuple[float, float]] = {}
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("Point") and ",xy," in line:
+            parts = _split_map_line(line)
+            if len(parts) < 12:
+                continue
+            x_text, y_text = parts[2], parts[3]
+            if not x_text or not y_text:
+                continue
+            try:
+                x = float(x_text)
+                y = float(y_text)
+            except ValueError:
+                continue
+            lat = _parse_dmm_fields(parts[6], parts[7], parts[8])
+            lon = _parse_dmm_fields(parts[9], parts[10], parts[11])
+            p = CalibrationPoint(x=x, y=y, is_corner=False)
+            if lon is not None and lat is not None:
+                p.lon = lon
+                p.lat = lat
+                p.lon_text = format_dmm(lon, "lon")
+                p.lat_text = format_dmm(lat, "lat")
+            sheet.points.append(p)
+            continue
+
+        if line.startswith("MMPXY"):
+            parts = _split_map_line(line)
+            if len(parts) >= 4:
+                try:
+                    idx = int(parts[1])
+                    boundary_xy[idx] = (float(parts[2]), float(parts[3]))
+                except ValueError:
+                    pass
+            continue
+
+        if line.startswith("MMPLL"):
+            parts = _split_map_line(line)
+            if len(parts) >= 4:
+                try:
+                    idx = int(parts[1])
+                    lon = float(parts[2])
+                    lat = float(parts[3])
+                    boundary_geo[idx] = (lon, lat)
+                except ValueError:
+                    pass
+            continue
+
+    for idx in sorted(set(boundary_xy.keys()) & set(boundary_geo.keys())):
+        x, y = boundary_xy[idx]
+        lon, lat = boundary_geo[idx]
+        sheet.points.append(
+            CalibrationPoint(
+                x=x,
+                y=y,
+                lon=lon,
+                lat=lat,
+                lon_text=format_dmm(lon, "lon"),
+                lat_text=format_dmm(lat, "lat"),
+                is_corner=True,
+            )
+        )
+
+    return MapImportEntry(scan_name=scan_name, image_path=str(scan_path), sheet=sheet)
+
+
 def parse_geo_coordinate(value: str, kind: str) -> Optional[float]:
     text = value.strip().upper()
     if not text:
@@ -540,6 +811,7 @@ class MapCanvas(QWidget):
     MODE_SELECT = "select"
     MODE_NEW_SHEET = "new_sheet"
     MODE_ADD_CAL_POINT = "add_cal"
+    MODE_ADD_OUTLINE_POINT = "add_outline"
 
     def __init__(self) -> None:
         super().__init__()
@@ -664,6 +936,9 @@ class MapCanvas(QWidget):
 
     def set_mode_add_cal_point(self) -> None:
         self.mode = self.MODE_ADD_CAL_POINT
+
+    def set_mode_add_outline_point(self) -> None:
+        self.mode = self.MODE_ADD_OUTLINE_POINT
 
     def nearest_point(self, x: float, y: float, radius: float = 8.0) -> tuple[Optional[int], Optional[int]]:
         best = (None, None)
@@ -841,6 +1116,22 @@ class MapCanvas(QWidget):
                 self.update()
             return
 
+        if self.mode == self.MODE_ADD_OUTLINE_POINT:
+            if self.selected_sheet is None:
+                if self.sheets:
+                    self.selected_sheet_idx = 0
+                else:
+                    idx = self.sheet_under(x, y)
+                    if idx is not None:
+                        self.selected_sheet_idx = idx
+            if self.selected_sheet is not None:
+                self.selected_sheet.points.append(CalibrationPoint(x=x, y=y, is_corner=True))
+                self.selected_point_idx = len(self.selected_sheet.points) - 1
+                self.selectionChanged.emit(self.selected_sheet_idx, self.selected_point_idx)
+                self.sheetsChanged.emit()
+                self.update()
+            return
+
         idx = self.sheet_under(x, y)
         self.selected_sheet_idx = idx
         self.selected_point_idx = None
@@ -998,6 +1289,12 @@ class MainWindow(QMainWindow):
         self.resize(1400, 900)
         self.project_path: Optional[Path] = None
         self.auto_fit_enabled = True
+        self.scans: list[Scan] = []
+        self.current_scan_idx: Optional[int] = None
+        self._suppress_selection_handlers = False
+        self.edit_point_key: Optional[tuple[int, int, int]] = None
+        self._editor_baseline_lat = ""
+        self._editor_baseline_lon = ""
 
         self.canvas = MapCanvas()
         self.canvas.apply_display_settings(self.display_settings)
@@ -1031,6 +1328,151 @@ class MainWindow(QMainWindow):
     def tr(self, key: str, **kwargs) -> str:
         return t(self.lang, key, **kwargs)
 
+    @staticmethod
+    def normalize_scan_path(path_text: str) -> str:
+        return str(Path(path_text).expanduser().resolve(strict=False))
+
+    def find_scan_index_by_image_path(self, image_path: str) -> Optional[int]:
+        key = self.normalize_scan_path(image_path)
+        for idx, scan in enumerate(self.scans):
+            if self.normalize_scan_path(scan.image_path) == key:
+                return idx
+        return None
+
+    @staticmethod
+    def tree_key_from_data(data: object) -> Optional[tuple]:
+        if not isinstance(data, dict):
+            return None
+        return (
+            data.get("type"),
+            data.get("scan_idx"),
+            data.get("sheet_idx"),
+            data.get("point_idx"),
+        )
+
+    def find_tree_item_by_key(self, key: tuple) -> Optional[QTreeWidgetItem]:
+        def walk(item: QTreeWidgetItem) -> Optional[QTreeWidgetItem]:
+            if self.tree_key_from_data(item.data(0, Qt.UserRole)) == key:
+                return item
+            for i in range(item.childCount()):
+                found = walk(item.child(i))
+                if found is not None:
+                    return found
+            return None
+
+        for i in range(self.sheet_tree.topLevelItemCount()):
+            found = walk(self.sheet_tree.topLevelItem(i))
+            if found is not None:
+                return found
+        return None
+
+    def current_selected_point_key(self) -> Optional[tuple[int, int, int]]:
+        if self.current_scan_idx is None:
+            return None
+        if self.canvas.selected_sheet_idx is None or self.canvas.selected_point_idx is None:
+            return None
+        return (self.current_scan_idx, self.canvas.selected_sheet_idx, self.canvas.selected_point_idx)
+
+    def get_point_by_key(self, key: tuple[int, int, int]) -> Optional[CalibrationPoint]:
+        scan_idx, sheet_idx, point_idx = key
+        if not (0 <= scan_idx < len(self.scans)):
+            return None
+        sheets = self.scans[scan_idx].sheets
+        if not (0 <= sheet_idx < len(sheets)):
+            return None
+        points = sheets[sheet_idx].points
+        if not (0 <= point_idx < len(points)):
+            return None
+        return points[point_idx]
+
+    def point_editor_dirty(self) -> bool:
+        if self.edit_point_key is None:
+            return False
+        return (
+            self.lat_edit.text().strip() != self._editor_baseline_lat
+            or self.lon_edit.text().strip() != self._editor_baseline_lon
+        )
+
+    def confirm_leave_point_editor(self, new_point_key: Optional[tuple[int, int, int]]) -> bool:
+        if self.edit_point_key is None or self.edit_point_key == new_point_key:
+            return True
+        if not self.point_editor_dirty():
+            return True
+
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle(self.tr("unsaved_point_title"))
+        msg.setText(self.tr("unsaved_point_msg"))
+        save_btn = msg.addButton(QMessageBox.Save)
+        discard_btn = msg.addButton(QMessageBox.Discard)
+        cancel_btn = msg.addButton(QMessageBox.Cancel)
+        msg.setDefaultButton(save_btn)
+        msg.exec()
+        clicked = msg.clickedButton()
+
+        if clicked == save_btn:
+            point = self.get_point_by_key(self.edit_point_key)
+            if point is None:
+                return True
+            return self.save_editor_values_to_point(point, show_errors=True, show_grid_hint=False)
+        if clicked == discard_btn:
+            return True
+        if clicked == cancel_btn:
+            return False
+        return False
+
+    @property
+    def current_scan(self) -> Optional[Scan]:
+        if self.current_scan_idx is None:
+            return None
+        if self.current_scan_idx < 0 or self.current_scan_idx >= len(self.scans):
+            return None
+        return self.scans[self.current_scan_idx]
+
+    def set_current_scan(self, idx: Optional[int]) -> None:
+        if idx is None or idx < 0 or idx >= len(self.scans):
+            self.current_scan_idx = None
+            self.canvas.pixmap = QPixmap()
+            self.canvas.image_path = None
+            self.canvas.sheets = []
+            self.canvas.selected_sheet_idx = None
+            self.canvas.selected_point_idx = None
+            self.canvas.updateGeometry()
+            self.canvas.update()
+            self.refresh_sheet_list()
+            return
+
+        scan = self.scans[idx]
+        self.current_scan_idx = idx
+        scan_path = Path(scan.image_path) if scan.image_path else None
+        if scan_path and scan_path.exists():
+            if not self.canvas.set_image(scan_path):
+                QMessageBox.warning(self, self.tr("warning_title"), self.tr("warning_missing_scan_image", path=str(scan_path)))
+                self.canvas.pixmap = QPixmap()
+                self.canvas.image_path = scan_path
+                self.canvas.updateGeometry()
+        elif scan_path is not None:
+            missing = str(scan_path) if scan_path else "-"
+            QMessageBox.warning(self, self.tr("warning_title"), self.tr("warning_missing_scan_image", path=missing))
+            self.canvas.pixmap = QPixmap()
+            self.canvas.image_path = scan_path
+            self.canvas.updateGeometry()
+        else:
+            self.canvas.pixmap = QPixmap()
+            self.canvas.image_path = None
+            self.canvas.updateGeometry()
+
+        self.canvas.sheets = scan.sheets
+        self.canvas.selected_sheet_idx = 0 if self.canvas.sheets else None
+        self.canvas.selected_point_idx = None
+        self.canvas.new_sheet_temp_points = []
+        self.canvas.mode = self.canvas.MODE_SELECT
+        self.canvas.dragging = False
+        self.canvas.update()
+        self.refresh_sheet_list()
+        self.auto_fit_enabled = True
+        QTimer.singleShot(0, self.fit_to_window)
+
     def update_window_title(self) -> None:
         if self.project_path is not None:
             self.setWindowTitle(f"{self.base_title} - {self.project_path.name}")
@@ -1061,8 +1503,10 @@ class MainWindow(QMainWindow):
         self.btn_close_sheet = QPushButton(self.tr("btn_close_sheet"))
         self.btn_cancel_sheet = QPushButton(self.tr("btn_cancel_drawing"))
         self.btn_add_cal = QPushButton(self.tr("btn_add_cal_point"))
+        self.btn_add_outline = QPushButton(self.tr("btn_add_outline_point"))
         self.btn_select_mode = QPushButton(self.tr("btn_select_mode"))
         self.btn_delete_sheet = QPushButton(self.tr("btn_delete_sheet"))
+        self.btn_delete_point = QPushButton(self.tr("btn_delete_point"))
         self.btn_use_as_corner = QPushButton(self.tr("btn_use_as_corner"))
         self.btn_zoom_in = QPushButton(self.tr("btn_zoom_in"))
         self.btn_zoom_out = QPushButton(self.tr("btn_zoom_out"))
@@ -1072,8 +1516,10 @@ class MainWindow(QMainWindow):
         self.btn_close_sheet.clicked.connect(self.close_sheet_clicked)
         self.btn_cancel_sheet.clicked.connect(self.canvas.cancel_new_sheet)
         self.btn_add_cal.clicked.connect(self.canvas.set_mode_add_cal_point)
+        self.btn_add_outline.clicked.connect(self.canvas.set_mode_add_outline_point)
         self.btn_select_mode.clicked.connect(self.canvas.set_mode_select)
         self.btn_delete_sheet.clicked.connect(self.delete_sheet)
+        self.btn_delete_point.clicked.connect(self.delete_selected_point)
         self.btn_use_as_corner.clicked.connect(self.use_selected_point_as_corner)
         self.btn_zoom_in.clicked.connect(self.zoom_in)
         self.btn_zoom_out.clicked.connect(self.zoom_out)
@@ -1083,66 +1529,257 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.btn_close_sheet)
         layout.addWidget(self.btn_cancel_sheet)
         layout.addWidget(self.btn_add_cal)
+        layout.addWidget(self.btn_add_outline)
         layout.addWidget(self.btn_select_mode)
         layout.addWidget(self.btn_delete_sheet)
+        layout.addWidget(self.btn_delete_point)
         layout.addWidget(self.btn_use_as_corner)
         layout.addWidget(self.btn_zoom_in)
         layout.addWidget(self.btn_zoom_out)
         layout.addWidget(self.btn_zoom_reset)
 
-        layout.addWidget(QLabel(self.tr("panel_sheets")))
+        self.lbl_sheets = QLabel(self.tr("panel_sheets"))
+        layout.addWidget(self.lbl_sheets)
         self.sheet_tree = QTreeWidget()
         self.sheet_tree.setHeaderHidden(True)
         self.sheet_tree.currentItemChanged.connect(self.on_tree_selection_changed)
         layout.addWidget(self.sheet_tree)
 
-        meta_title = QLabel(self.tr("panel_sheet_meta"))
-        layout.addWidget(meta_title)
-        meta_form = QFormLayout()
+        self.lbl_meta_title = QLabel(self.tr("panel_sheet_meta"))
+        layout.addWidget(self.lbl_meta_title)
+        self.meta_form = QFormLayout()
         self.name_edit = QLineEdit()
         self.scale_edit = QLineEdit()
         self.name_edit.textEdited.connect(self.on_sheet_meta_changed)
         self.scale_edit.textEdited.connect(self.on_sheet_meta_changed)
-        meta_form.addRow(self.tr("field_name"), self.name_edit)
-        meta_form.addRow(self.tr("field_scale"), self.scale_edit)
-        layout.addLayout(meta_form)
+        self.meta_form.addRow(self.tr("field_name"), self.name_edit)
+        self.meta_form.addRow(self.tr("field_scale"), self.scale_edit)
+        layout.addLayout(self.meta_form)
 
-        point_title = QLabel(self.tr("panel_point_geo"))
-        layout.addWidget(point_title)
-        point_form = QFormLayout()
-        self.lon_edit = QLineEdit()
+        self.lbl_point_title = QLabel(self.tr("panel_point_geo"))
+        layout.addWidget(self.lbl_point_title)
+        self.point_form = QFormLayout()
         self.lat_edit = QLineEdit()
-        self.lon_edit.editingFinished.connect(self.on_point_geo_changed)
-        self.lat_edit.editingFinished.connect(self.on_point_geo_changed)
-        point_form.addRow("Lon", self.lon_edit)
-        point_form.addRow("Lat", self.lat_edit)
-        layout.addLayout(point_form)
+        self.lon_edit = QLineEdit()
+        self.point_form.addRow(self.tr("field_lat"), self.lat_edit)
+        self.point_form.addRow(self.tr("field_lon"), self.lon_edit)
+        layout.addLayout(self.point_form)
+        self.btn_save_point = QPushButton(self.tr("btn_save_point"))
+        self.btn_save_point.clicked.connect(self.save_selected_point_geo)
+        layout.addWidget(self.btn_save_point)
 
         layout.addStretch(1)
         return panel
 
     def build_menu(self) -> None:
-        file_menu = self.menuBar().addMenu(self.tr("menu_file"))
-        open_img = QAction(self.tr("menu_open_scan"), self)
-        open_img.triggered.connect(self.open_image)
-        file_menu.addAction(open_img)
+        self.menu_file = self.menuBar().addMenu(self.tr("menu_file"))
+        self.action_open_img = QAction(self.tr("menu_open_scan"), self)
+        self.action_open_img.triggered.connect(self.open_image)
+        self.menu_file.addAction(self.action_open_img)
 
-        save_proj = QAction(self.tr("menu_save"), self)
-        save_proj.triggered.connect(self.save_project)
-        file_menu.addAction(save_proj)
+        self.action_import_map = QAction(self.tr("menu_import_map"), self)
+        self.action_import_map.triggered.connect(self.import_map_files)
+        self.menu_file.addAction(self.action_import_map)
 
-        save_as_proj = QAction(self.tr("menu_save_as"), self)
-        save_as_proj.triggered.connect(self.save_project_as)
-        file_menu.addAction(save_as_proj)
+        self.action_save_proj = QAction(self.tr("menu_save"), self)
+        self.action_save_proj.triggered.connect(self.save_project)
+        self.menu_file.addAction(self.action_save_proj)
 
-        load_proj = QAction(self.tr("menu_load_project"), self)
-        load_proj.triggered.connect(self.load_project)
-        file_menu.addAction(load_proj)
+        self.action_save_as_proj = QAction(self.tr("menu_save_as"), self)
+        self.action_save_as_proj.triggered.connect(self.save_project_as)
+        self.menu_file.addAction(self.action_save_as_proj)
 
-        help_menu = self.menuBar().addMenu(self.tr("menu_help"))
-        show_readme = QAction(self.tr("menu_readme"), self)
-        show_readme.triggered.connect(self.show_readme_help)
-        help_menu.addAction(show_readme)
+        self.action_load_proj = QAction(self.tr("menu_load_project"), self)
+        self.action_load_proj.triggered.connect(self.load_project)
+        self.menu_file.addAction(self.action_load_proj)
+
+        self.menu_settings = self.menuBar().addMenu(self.tr("menu_settings"))
+        self.action_edit_settings = QAction(self.tr("menu_edit_settings"), self)
+        self.action_edit_settings.triggered.connect(self.edit_settings)
+        self.menu_settings.addAction(self.action_edit_settings)
+
+        self.menu_help = self.menuBar().addMenu(self.tr("menu_help"))
+        self.action_show_readme = QAction(self.tr("menu_readme"), self)
+        self.action_show_readme.triggered.connect(self.show_readme_help)
+        self.menu_help.addAction(self.action_show_readme)
+
+    def apply_language_to_ui(self) -> None:
+        self.base_title = t(self.lang, "title")
+        self.update_window_title()
+        self.canvas.set_language(self.lang)
+
+        self.btn_new_sheet.setText(self.tr("btn_new_sheet"))
+        self.btn_close_sheet.setText(self.tr("btn_close_sheet"))
+        self.btn_cancel_sheet.setText(self.tr("btn_cancel_drawing"))
+        self.btn_add_cal.setText(self.tr("btn_add_cal_point"))
+        self.btn_add_outline.setText(self.tr("btn_add_outline_point"))
+        self.btn_select_mode.setText(self.tr("btn_select_mode"))
+        self.btn_delete_sheet.setText(self.tr("btn_delete_sheet"))
+        self.btn_delete_point.setText(self.tr("btn_delete_point"))
+        self.btn_use_as_corner.setText(self.tr("btn_use_as_corner"))
+        self.btn_zoom_in.setText(self.tr("btn_zoom_in"))
+        self.btn_zoom_out.setText(self.tr("btn_zoom_out"))
+        self.btn_zoom_reset.setText(self.tr("btn_zoom_reset"))
+        self.btn_save_point.setText(self.tr("btn_save_point"))
+
+        self.lbl_sheets.setText(self.tr("panel_sheets"))
+        self.lbl_meta_title.setText(self.tr("panel_sheet_meta"))
+        self.lbl_point_title.setText(self.tr("panel_point_geo"))
+
+        name_label = self.meta_form.labelForField(self.name_edit)
+        if name_label is not None:
+            name_label.setText(self.tr("field_name"))
+        scale_label = self.meta_form.labelForField(self.scale_edit)
+        if scale_label is not None:
+            scale_label.setText(self.tr("field_scale"))
+        lat_label = self.point_form.labelForField(self.lat_edit)
+        if lat_label is not None:
+            lat_label.setText(self.tr("field_lat"))
+        lon_label = self.point_form.labelForField(self.lon_edit)
+        if lon_label is not None:
+            lon_label.setText(self.tr("field_lon"))
+
+        self.menu_file.setTitle(self.tr("menu_file"))
+        self.action_open_img.setText(self.tr("menu_open_scan"))
+        self.action_import_map.setText(self.tr("menu_import_map"))
+        self.action_save_proj.setText(self.tr("menu_save"))
+        self.action_save_as_proj.setText(self.tr("menu_save_as"))
+        self.action_load_proj.setText(self.tr("menu_load_project"))
+        self.menu_settings.setTitle(self.tr("menu_settings"))
+        self.action_edit_settings.setText(self.tr("menu_edit_settings"))
+        self.menu_help.setTitle(self.tr("menu_help"))
+        self.action_show_readme.setText(self.tr("menu_readme"))
+
+        point_dirty = self.point_editor_dirty()
+        dirty_lat = self.lat_edit.text()
+        dirty_lon = self.lon_edit.text()
+        dirty_lat_style = self.lat_edit.styleSheet()
+        dirty_lon_style = self.lon_edit.styleSheet()
+        dirty_key = self.edit_point_key
+
+        self.refresh_sheet_list()
+
+        if point_dirty and dirty_key is not None and self.current_selected_point_key() == dirty_key:
+            self.lat_edit.setText(dirty_lat)
+            self.lon_edit.setText(dirty_lon)
+            self.lat_edit.setStyleSheet(dirty_lat_style)
+            self.lon_edit.setStyleSheet(dirty_lon_style)
+
+        if self.canvas.cursor_x is not None and self.canvas.cursor_y is not None:
+            geo = self.canvas.geo_for_cursor(self.canvas.cursor_x, self.canvas.cursor_y)
+            self.on_cursor_moved(self.canvas.cursor_x, self.canvas.cursor_y, geo)
+        else:
+            self.statusBar().showMessage(self.tr("ready"))
+
+    @staticmethod
+    def _settings_path_for_write(existing_path: Optional[Path]) -> Path:
+        if existing_path is not None:
+            return existing_path
+        return Path.cwd() / ".pymapcal"
+
+    def edit_settings(self) -> None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle(self.tr("settings_dialog_title"))
+        dlg.resize(700, 700)
+        layout = QVBoxLayout(dlg)
+        form = QFormLayout()
+
+        lang_combo = QComboBox(dlg)
+        lang_combo.addItem(self.tr("settings_lang_pl"), "pl")
+        lang_combo.addItem(self.tr("settings_lang_en"), "en")
+        lang_combo.setCurrentIndex(0 if self.lang == "pl" else 1)
+        form.addRow(self.tr("settings_field_language"), lang_combo)
+
+        def make_spin(value: int, min_v: int, max_v: int) -> QSpinBox:
+            s = QSpinBox(dlg)
+            s.setRange(min_v, max_v)
+            s.setValue(value)
+            return s
+
+        outline_width = make_spin(self.display_settings.outline_width, 1, 12)
+        outline_sel_width = make_spin(self.display_settings.outline_selected_width, 1, 16)
+        draft_width = make_spin(self.display_settings.draft_outline_width, 1, 16)
+        arm_corner = make_spin(self.display_settings.crosshair_arm_corner, 4, 80)
+        arm_cal = make_spin(self.display_settings.crosshair_arm_cal, 4, 80)
+        ring_corner = make_spin(self.display_settings.crosshair_ring_corner, 1, 40)
+        ring_cal = make_spin(self.display_settings.crosshair_ring_cal, 1, 40)
+        sel_arm = make_spin(self.display_settings.crosshair_selected_arm_bonus, 0, 40)
+        sel_ring = make_spin(self.display_settings.crosshair_selected_ring_bonus, 0, 20)
+        guide_width = make_spin(self.display_settings.cursor_guide_width, 1, 16)
+        guide_alpha = make_spin(self.display_settings.cursor_guide_alpha, 0, 255)
+        guide_dash = make_spin(self.display_settings.cursor_guide_dash, 1, 80)
+        guide_gap = make_spin(self.display_settings.cursor_guide_gap, 1, 80)
+        guide_color = QLineEdit(self.display_settings.cursor_guide_color, dlg)
+
+        form.addRow(self.tr("settings_field_outline_width"), outline_width)
+        form.addRow(self.tr("settings_field_outline_selected_width"), outline_sel_width)
+        form.addRow(self.tr("settings_field_draft_outline_width"), draft_width)
+        form.addRow(self.tr("settings_field_crosshair_arm_corner"), arm_corner)
+        form.addRow(self.tr("settings_field_crosshair_arm_cal"), arm_cal)
+        form.addRow(self.tr("settings_field_crosshair_ring_corner"), ring_corner)
+        form.addRow(self.tr("settings_field_crosshair_ring_cal"), ring_cal)
+        form.addRow(self.tr("settings_field_crosshair_selected_arm_bonus"), sel_arm)
+        form.addRow(self.tr("settings_field_crosshair_selected_ring_bonus"), sel_ring)
+        form.addRow(self.tr("settings_field_cursor_guide_width"), guide_width)
+        form.addRow(self.tr("settings_field_cursor_guide_alpha"), guide_alpha)
+        form.addRow(self.tr("settings_field_cursor_guide_dash"), guide_dash)
+        form.addRow(self.tr("settings_field_cursor_guide_gap"), guide_gap)
+        form.addRow(self.tr("settings_field_cursor_guide_color"), guide_color)
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, parent=dlg)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        color_text = guide_color.text().strip()
+        if not QColor(color_text).isValid():
+            QMessageBox.warning(self, self.tr("error_title"), self.tr("settings_invalid_color"))
+            return
+
+        new_lang = lang_combo.currentData()
+        new_settings = DisplaySettings(
+            outline_width=outline_width.value(),
+            outline_selected_width=outline_sel_width.value(),
+            draft_outline_width=draft_width.value(),
+            crosshair_arm_corner=arm_corner.value(),
+            crosshair_arm_cal=arm_cal.value(),
+            crosshair_ring_corner=ring_corner.value(),
+            crosshair_ring_cal=ring_cal.value(),
+            crosshair_selected_arm_bonus=sel_arm.value(),
+            crosshair_selected_ring_bonus=sel_ring.value(),
+            cursor_guide_width=guide_width.value(),
+            cursor_guide_alpha=guide_alpha.value(),
+            cursor_guide_dash=guide_dash.value(),
+            cursor_guide_gap=guide_gap.value(),
+            cursor_guide_color=color_text,
+        )
+
+        settings_path = self._settings_path_for_write(self.display_settings_path)
+        payload = {
+            "language": new_lang,
+            "display": new_settings.to_dict(),
+        }
+        try:
+            settings_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        except Exception as exc:
+            QMessageBox.critical(self, self.tr("error_title"), self.tr("settings_save_error", error=exc))
+            return
+
+        self.display_settings = new_settings
+        self.display_settings_path = settings_path
+        self.canvas.apply_display_settings(new_settings)
+
+        lang_changed = new_lang != self.lang
+        self.lang = new_lang
+        if lang_changed:
+            self.apply_language_to_ui()
+            self.statusBar().showMessage(self.tr("settings_save_ok", path=str(settings_path)))
+        else:
+            self.statusBar().showMessage(self.tr("settings_save_ok", path=str(settings_path)))
 
     def show_readme_help(self) -> None:
         base = Path(__file__).resolve().parent
@@ -1253,13 +1890,53 @@ class MainWindow(QMainWindow):
 
     def delete_sheet(self) -> None:
         idx = self.canvas.selected_sheet_idx
-        if idx is None:
+        sheet = self.canvas.selected_sheet
+        if idx is None or sheet is None:
+            return
+        answer = QMessageBox.question(
+            self,
+            self.tr("confirm_title"),
+            self.tr("confirm_delete_sheet_named", name=sheet.name),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
             return
         del self.canvas.sheets[idx]
         if self.canvas.sheets:
             self.canvas.selected_sheet_idx = max(0, idx - 1)
         else:
             self.canvas.selected_sheet_idx = None
+        self.canvas.selected_point_idx = None
+        self.refresh_sheet_list()
+        self.canvas.update()
+
+    def delete_selected_point(self) -> None:
+        sheet = self.canvas.selected_sheet
+        idx = self.canvas.selected_point_idx
+        point = self.canvas.selected_point
+        if sheet is None or idx is None or point is None:
+            return
+        if idx < 0 or idx >= len(sheet.points):
+            return
+        kind = self.tr("point_kind_outline") if point.is_corner else self.tr("point_kind_calibration")
+        kind_index = 0
+        for i, p in enumerate(sheet.points):
+            if p.is_corner == point.is_corner:
+                kind_index += 1
+            if i == idx:
+                break
+
+        answer = QMessageBox.question(
+            self,
+            self.tr("confirm_title"),
+            self.tr("confirm_delete_point_named", kind=kind, index=kind_index),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        del sheet.points[idx]
         self.canvas.selected_point_idx = None
         self.refresh_sheet_list()
         self.canvas.update()
@@ -1284,79 +1961,197 @@ class MainWindow(QMainWindow):
         self.canvas.update()
 
     def refresh_sheet_list(self) -> None:
+        vbar = self.sheet_tree.verticalScrollBar()
+        hbar = self.sheet_tree.horizontalScrollBar()
+        vpos = vbar.value()
+        hpos = hbar.value()
+
+        expanded_keys: set[tuple] = set()
+        selected_key: Optional[tuple] = None
+
+        key_from_data = self.tree_key_from_data
+
+        def collect_state(item: QTreeWidgetItem) -> None:
+            nonlocal selected_key
+            data = item.data(0, Qt.UserRole)
+            key = key_from_data(data)
+            if key is not None and item.isExpanded():
+                expanded_keys.add(key)
+            if item is self.sheet_tree.currentItem() and key is not None:
+                selected_key = key
+            for i in range(item.childCount()):
+                collect_state(item.child(i))
+
+        for i in range(self.sheet_tree.topLevelItemCount()):
+            collect_state(self.sheet_tree.topLevelItem(i))
+
         self.sheet_tree.blockSignals(True)
         self.sheet_tree.clear()
 
         selected_item: Optional[QTreeWidgetItem] = None
-        for si, s in enumerate(self.canvas.sheets):
-            top = QTreeWidgetItem([self.tr("tree_sheet_item", name=s.name, count=len(s.points))])
-            top.setData(0, Qt.UserRole, {"type": "sheet", "sheet_idx": si})
-            self.sheet_tree.addTopLevelItem(top)
+        key_to_item: dict[tuple, QTreeWidgetItem] = {}
 
-            corners_item = QTreeWidgetItem([self.tr("tree_crop_outline")])
-            corners_item.setData(0, Qt.UserRole, {"type": "corner_group", "sheet_idx": si})
-            top.addChild(corners_item)
+        def register_item(item: QTreeWidgetItem, data: dict) -> None:
+            key = key_from_data(data)
+            if key is not None:
+                key_to_item[key] = item
 
-            cal_item = QTreeWidgetItem([self.tr("tree_cal_points")])
-            cal_item.setData(0, Qt.UserRole, {"type": "cal_group", "sheet_idx": si})
-            top.addChild(cal_item)
+        for scan_idx, scan in enumerate(self.scans):
+            scan_name = scan.name if scan.name else Path(scan.image_path).stem
+            scan_item = QTreeWidgetItem([self.tr("tree_scan_item", name=scan_name)])
+            scan_data = {"type": "scan", "scan_idx": scan_idx}
+            scan_item.setData(0, Qt.UserRole, scan_data)
+            register_item(scan_item, scan_data)
+            self.sheet_tree.addTopLevelItem(scan_item)
 
-            corner_no = 1
-            cal_no = 1
-            for pi, p in enumerate(s.points):
-                if p.is_corner:
-                    label = self.tr("tree_corner_item", n=corner_no, x=p.x, y=p.y)
-                    parent = corners_item
-                    corner_no += 1
-                else:
-                    label = self.tr("tree_point_item", n=cal_no, x=p.x, y=p.y)
-                    parent = cal_item
-                    cal_no += 1
-                point_item = QTreeWidgetItem([label])
-                point_item.setData(0, Qt.UserRole, {"type": "point", "sheet_idx": si, "point_idx": pi})
-                parent.addChild(point_item)
+            for sheet_idx, sheet in enumerate(scan.sheets):
+                sheet_item = QTreeWidgetItem([self.tr("tree_sheet_item", name=sheet.name, count=len(sheet.points))])
+                sheet_data = {"type": "sheet", "scan_idx": scan_idx, "sheet_idx": sheet_idx}
+                sheet_item.setData(0, Qt.UserRole, sheet_data)
+                register_item(sheet_item, sheet_data)
+                scan_item.addChild(sheet_item)
 
-                if si == self.canvas.selected_sheet_idx and pi == self.canvas.selected_point_idx:
-                    selected_item = point_item
+                corners_item = QTreeWidgetItem([self.tr("tree_crop_outline")])
+                corners_data = {"type": "corner_group", "scan_idx": scan_idx, "sheet_idx": sheet_idx}
+                corners_item.setData(0, Qt.UserRole, corners_data)
+                register_item(corners_item, corners_data)
+                sheet_item.addChild(corners_item)
 
-            top.setExpanded(True)
-            corners_item.setExpanded(True)
-            cal_item.setExpanded(True)
+                cal_item = QTreeWidgetItem([self.tr("tree_cal_points")])
+                cal_data = {"type": "cal_group", "scan_idx": scan_idx, "sheet_idx": sheet_idx}
+                cal_item.setData(0, Qt.UserRole, cal_data)
+                register_item(cal_item, cal_data)
+                sheet_item.addChild(cal_item)
 
-            if si == self.canvas.selected_sheet_idx and self.canvas.selected_point_idx is None:
-                selected_item = top
+                corner_no = 1
+                cal_no = 1
+                for point_idx, point in enumerate(sheet.points):
+                    if point.is_corner:
+                        label = self.tr("tree_corner_item", n=corner_no, x=point.x, y=point.y)
+                        parent = corners_item
+                        corner_no += 1
+                    else:
+                        label = self.tr("tree_point_item", n=cal_no, x=point.x, y=point.y)
+                        parent = cal_item
+                        cal_no += 1
+                    point_item = QTreeWidgetItem([label])
+                    point_data = {
+                        "type": "point",
+                        "scan_idx": scan_idx,
+                        "sheet_idx": sheet_idx,
+                        "point_idx": point_idx,
+                    }
+                    point_item.setData(0, Qt.UserRole, point_data)
+                    register_item(point_item, point_data)
+                    parent.addChild(point_item)
 
+                    if (
+                        scan_idx == self.current_scan_idx
+                        and sheet_idx == self.canvas.selected_sheet_idx
+                        and point_idx == self.canvas.selected_point_idx
+                    ):
+                        selected_item = point_item
+
+                sheet_key = key_from_data(sheet_data)
+                corners_key = key_from_data(corners_data)
+                cal_key = key_from_data(cal_data)
+                sheet_item.setExpanded(sheet_key in expanded_keys if sheet_key is not None else True)
+                corners_item.setExpanded(corners_key in expanded_keys if corners_key is not None else True)
+                cal_item.setExpanded(cal_key in expanded_keys if cal_key is not None else True)
+
+                if (
+                    scan_idx == self.current_scan_idx
+                    and sheet_idx == self.canvas.selected_sheet_idx
+                    and self.canvas.selected_point_idx is None
+                ):
+                    selected_item = sheet_item
+
+            scan_key = key_from_data(scan_data)
+            scan_item.setExpanded(scan_key in expanded_keys if scan_key is not None else True)
+            if scan_idx == self.current_scan_idx and self.canvas.selected_sheet_idx is None:
+                selected_item = scan_item
+
+        if selected_key is not None and selected_key in key_to_item:
+            selected_item = key_to_item[selected_key]
         if selected_item is not None:
             self.sheet_tree.setCurrentItem(selected_item)
         self.sheet_tree.blockSignals(False)
+        vbar.setValue(vpos)
+        hbar.setValue(hpos)
         self.refresh_editors()
 
     def on_tree_selection_changed(self, current: Optional[QTreeWidgetItem], _previous: Optional[QTreeWidgetItem]) -> None:
+        if self._suppress_selection_handlers:
+            return
         if current is None:
             return
         data = current.data(0, Qt.UserRole)
         if not isinstance(data, dict):
             return
 
-        sheet_idx = data.get("sheet_idx")
-        if not isinstance(sheet_idx, int) or sheet_idx < 0 or sheet_idx >= len(self.canvas.sheets):
+        scan_idx = data.get("scan_idx")
+        if not isinstance(scan_idx, int) or scan_idx < 0 or scan_idx >= len(self.scans):
             return
 
-        self.canvas.selected_sheet_idx = sheet_idx
+        new_point_key: Optional[tuple[int, int, int]] = None
+        if (
+            data.get("type") == "point"
+            and isinstance(data.get("sheet_idx"), int)
+            and isinstance(data.get("point_idx"), int)
+        ):
+            new_point_key = (scan_idx, data["sheet_idx"], data["point_idx"])
+
+        if not self.confirm_leave_point_editor(new_point_key):
+            if self.edit_point_key is not None:
+                old_key = ("point", self.edit_point_key[0], self.edit_point_key[1], self.edit_point_key[2])
+                old_item = self.find_tree_item_by_key(old_key)
+                if old_item is not None:
+                    self._suppress_selection_handlers = True
+                    self.sheet_tree.setCurrentItem(old_item)
+                    self._suppress_selection_handlers = False
+            return
+
+        if scan_idx != self.current_scan_idx:
+            self.set_current_scan(scan_idx)
+
         item_type = data.get("type")
-        if item_type == "point":
-            point_idx = data.get("point_idx")
-            if isinstance(point_idx, int):
-                self.canvas.selected_point_idx = point_idx
+        sheet_idx = data.get("sheet_idx")
+        if item_type == "scan":
+            self.canvas.selected_sheet_idx = None
+            self.canvas.selected_point_idx = None
+        elif isinstance(sheet_idx, int) and 0 <= sheet_idx < len(self.canvas.sheets):
+            self.canvas.selected_sheet_idx = sheet_idx
+            if item_type == "point":
+                point_idx = data.get("point_idx")
+                if isinstance(point_idx, int):
+                    self.canvas.selected_point_idx = point_idx
+                else:
+                    self.canvas.selected_point_idx = None
             else:
                 self.canvas.selected_point_idx = None
         else:
-            self.canvas.selected_point_idx = None
+            return
 
         self.canvas.selectionChanged.emit(self.canvas.selected_sheet_idx, self.canvas.selected_point_idx)
         self.canvas.update()
 
     def on_canvas_selection_changed(self, _sheet_idx, _point_idx) -> None:
+        if self._suppress_selection_handlers:
+            return
+        new_point_key = self.current_selected_point_key()
+        if not self.confirm_leave_point_editor(new_point_key):
+            if self.edit_point_key is not None:
+                scan_idx, sheet_idx, point_idx = self.edit_point_key
+                self._suppress_selection_handlers = True
+                if scan_idx != self.current_scan_idx:
+                    self.set_current_scan(scan_idx)
+                self.canvas.selected_sheet_idx = sheet_idx
+                self.canvas.selected_point_idx = point_idx
+                self.canvas.update()
+                self.refresh_sheet_list()
+                self.refresh_editors()
+                self._suppress_selection_handlers = False
+            return
         self.refresh_sheet_list()
         self.refresh_editors()
 
@@ -1389,6 +2184,12 @@ class MainWindow(QMainWindow):
         self.scale_edit.blockSignals(False)
         self.lon_edit.blockSignals(False)
         self.lat_edit.blockSignals(False)
+        self.lon_edit.setStyleSheet("")
+        self.lat_edit.setStyleSheet("")
+        self.btn_save_point.setEnabled(point is not None)
+        self.edit_point_key = self.current_selected_point_key()
+        self._editor_baseline_lat = self.lat_edit.text().strip()
+        self._editor_baseline_lon = self.lon_edit.text().strip()
 
     def on_sheet_meta_changed(self) -> None:
         sheet = self.canvas.selected_sheet
@@ -1399,32 +2200,59 @@ class MainWindow(QMainWindow):
         self.refresh_sheet_list()
         self.canvas.update()
 
-    def on_point_geo_changed(self) -> None:
-        point = self.canvas.selected_point
-        if point is None:
-            return
+    def save_editor_values_to_point(
+        self,
+        point: CalibrationPoint,
+        show_errors: bool = True,
+        show_grid_hint: bool = True,
+    ) -> bool:
         lon_text = self.lon_edit.text().strip()
         lat_text = self.lat_edit.text().strip()
         lon = parse_geo_coordinate(lon_text, "lon")
         lat = parse_geo_coordinate(lat_text, "lat")
+        has_error = False
+
+        self.lon_edit.setStyleSheet("")
+        self.lat_edit.setStyleSheet("")
 
         if lon_text and lon is None:
-            QMessageBox.warning(
-                self,
-                self.tr("error_lon_format_title"),
-                self.tr("error_lon_format_msg"),
-            )
+            has_error = True
+            self.lon_edit.setStyleSheet("border: 2px solid #ff4d6d;")
         if lat_text and lat is None:
-            QMessageBox.warning(
-                self,
-                self.tr("error_lat_format_title"),
-                self.tr("error_lat_format_msg"),
-            )
+            has_error = True
+            self.lat_edit.setStyleSheet("border: 2px solid #ff4d6d;")
+
+        if has_error:
+            if show_errors:
+                details: list[str] = []
+                if lon_text and lon is None:
+                    details.append(self.tr("error_lon_format_msg"))
+                if lat_text and lat is None:
+                    details.append(self.tr("error_lat_format_msg"))
+                QMessageBox.warning(
+                    self,
+                    self.tr("error_point_save_title"),
+                    self.tr("error_point_save_msg") + "\n\n" + "\n".join(details),
+                )
+            return False
 
         point.lon_text = lon_text
         point.lat_text = lat_text
         point.lon = lon
         point.lat = lat
+        if show_grid_hint:
+            known = [p for p in self.canvas.selected_sheet.points if p.lon is not None and p.lat is not None] if self.canvas.selected_sheet else []
+            if len(known) < 2:
+                self.statusBar().showMessage(self.tr("status_grid_hint"))
+        return True
+
+    def save_selected_point_geo(self) -> None:
+        point = self.canvas.selected_point
+        if point is None:
+            QMessageBox.warning(self, self.tr("error_title"), self.tr("error_point_not_selected"))
+            return
+        if not self.save_editor_values_to_point(point, show_errors=True, show_grid_hint=True):
+            return
         self.refresh_editors()
         self.canvas.update()
 
@@ -1438,18 +2266,66 @@ class MainWindow(QMainWindow):
         if not path_str:
             return
         path = Path(path_str)
-        if not self.canvas.set_image(path):
+        test_pix = QPixmap(str(path))
+        if test_pix.isNull():
             QMessageBox.critical(self, self.tr("error_title"), self.tr("error_open_image"))
             return
-        self.canvas.clear_all()
-        self.canvas.sheets.append(Sheet(name=path.stem or f"{self.tr('sheet_default')} 1"))
-        self.canvas.selected_sheet_idx = 0
-        self.canvas.selected_point_idx = None
-        self.canvas.sheetsChanged.emit()
+        new_scan = Scan(
+            name=path.stem,
+            image_path=str(path),
+            sheets=[Sheet(name=f"{self.tr('sheet_default')} 1")],
+        )
+        self.scans.append(new_scan)
+        self.set_current_scan(len(self.scans) - 1)
         self.auto_fit_enabled = True
         QTimer.singleShot(0, self.fit_to_window)
         self.project_path = None
         self.update_window_title()
+
+    def import_map_files(self) -> None:
+        file_list, _ = QFileDialog.getOpenFileNames(
+            self,
+            self.tr("dialog_import_map"),
+            "",
+            self.tr("dialog_map_filter"),
+        )
+        if not file_list:
+            return
+
+        ok = 0
+        fail = 0
+        last_scan_idx: Optional[int] = None
+        for path_str in file_list:
+            map_path = Path(path_str)
+            entry = parse_ozi_map_file(map_path)
+            if entry is None:
+                fail += 1
+                continue
+
+            existing_idx = self.find_scan_index_by_image_path(entry.image_path)
+            if existing_idx is None:
+                self.scans.append(
+                    Scan(
+                        name=entry.scan_name,
+                        image_path=entry.image_path,
+                        sheets=[entry.sheet],
+                    )
+                )
+                last_scan_idx = len(self.scans) - 1
+            else:
+                self.scans[existing_idx].sheets.append(entry.sheet)
+                last_scan_idx = existing_idx
+            ok += 1
+
+        if last_scan_idx is not None:
+            self.set_current_scan(last_scan_idx)
+            self.project_path = None
+            self.update_window_title()
+        QMessageBox.information(
+            self,
+            self.tr("import_summary_title"),
+            self.tr("import_summary", ok=ok, fail=fail),
+        )
 
     def save_project(self) -> None:
         if self.project_path is not None:
@@ -1459,8 +2335,9 @@ class MainWindow(QMainWindow):
         self.save_project_as()
 
     def save_project_as(self) -> None:
-        if self.canvas.image_path is not None:
-            suggested_path = self.canvas.image_path.with_suffix(".json")
+        current_scan = self.current_scan
+        if current_scan and current_scan.image_path:
+            suggested_path = Path(current_scan.image_path).with_suffix(".json")
         elif self.project_path is not None:
             suggested_path = self.project_path
         else:
@@ -1482,8 +2359,7 @@ class MainWindow(QMainWindow):
 
     def write_project_to_path(self, path: Path) -> None:
         data = {
-            "image_path": str(self.canvas.image_path) if self.canvas.image_path else "",
-            "sheets": [s.to_json() for s in self.canvas.sheets],
+            "scans": [scan.to_json() for scan in self.scans],
         }
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         self.project_path = path
@@ -1507,21 +2383,28 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, self.tr("error_title"), self.tr("error_load_project", error=exc))
             return False
 
-        image_path = Path(data.get("image_path", ""))
-        if image_path and image_path.exists():
-            if not self.canvas.set_image(image_path):
-                QMessageBox.critical(self, self.tr("error_title"), self.tr("error_open_project_image"))
-                return False
+        loaded_scans: list[Scan] = []
+        if isinstance(data.get("scans"), list):
+            loaded_scans = [Scan.from_json(s) for s in data.get("scans", []) if isinstance(s, dict)]
         else:
-            QMessageBox.warning(self, self.tr("warning_title"), self.tr("warning_missing_project_image"))
-            self.canvas.pixmap = QPixmap()
-        self.canvas.sheets = [Sheet.from_json(s) for s in data.get("sheets", [])]
-        self.canvas.selected_sheet_idx = 0 if self.canvas.sheets else None
-        self.canvas.selected_point_idx = None
-        self.canvas.update()
-        self.refresh_sheet_list()
-        self.auto_fit_enabled = True
-        QTimer.singleShot(0, self.fit_to_window)
+            # Backward compatibility: single scan format.
+            image_path = str(data.get("image_path", ""))
+            legacy_sheets = [Sheet.from_json(s) for s in data.get("sheets", [])]
+            if image_path or legacy_sheets:
+                loaded_scans = [
+                    Scan(
+                        name=Path(image_path).stem if image_path else self.tr("sheet_default"),
+                        image_path=image_path,
+                        sheets=legacy_sheets,
+                    )
+                ]
+
+        self.scans = loaded_scans
+        if self.scans:
+            self.set_current_scan(0)
+        else:
+            self.set_current_scan(None)
+
         self.project_path = path
         self.update_window_title()
         return True

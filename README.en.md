@@ -1,6 +1,7 @@
 # pymapcal
 
-Qt MVP app for calibrating map sheets on top of a scanned map.
+Qt MVP app for calibrating map sheets in a map album.
+A project album contains multiple scans, and each scan contains its own sheets.
 
 ## Requirements
 - Python 3.10+
@@ -12,20 +13,24 @@ python3 main.py
 ```
 
 ## Usage
-1. `File -> Open map scan` (`tif/tiff/bmp/png/jpg/jpeg`).
+1. `File -> Add map scan` (`tif/tiff/bmp/png/jpg/jpeg`).
+   - or `File -> Import MAP...` to import calibration from OziExplorer `.map` files.
+   - if multiple `.map` files point to the same scan image, the scan is added only once and each `.map` adds another sheet.
 2. Click `New sheet` and add corner points by clicking on the map.
 3. Click `Close sheet` to create the polygon.
 4. `Add calibration point` adds a calibration point (max 9 per sheet).
+   - `Add outline point` adds a crop/mask point that is not a calibration point.
    - after clicking, coordinates are auto-predicted from current calibration,
    - you can edit them manually,
    - when adding/moving a calibration point, cursor guide lines are shown.
 5. Drag points to move them.
 6. In the side panel:
-   - project tree: each sheet has `Crop outline` and `Calibration points`,
+   - project tree: `Scan -> Sheets -> (Crop outline / Calibration points)`,
    - clicking a tree item selects the corresponding sheet/point on the map,
+   - `Delete selected point` removes current calibration/outline point,
    - `Use calibration point in crop outline` allows reusing a calibration point as a crop point,
    - edit selected sheet name and scale,
-   - edit `Lon` and `Lat` for selected point (supported formats below).
+   - edit `Lat` and `Lon` for selected point, then click `Save point` (with format validation).
 7. Status bar shows cursor position in pixels and approximate geo coordinates.
 8. Pan and zoom:
    - mouse wheel: zoom to cursor,
@@ -39,7 +44,8 @@ python3 main.py
 - Outline lines have constant on-screen thickness (not scaled with zoom).
 - `File -> Save` writes to current project file (no prompt).
 - `File -> Save as...` writes to a new file/path.
-- `File -> Load project` loads sheet data from JSON.
+- `File -> Save` / `Save as...` / `Load album` operate on the whole album (all scans).
+- `Settings -> Edit settings...` lets you edit display parameters and language, then save to `.pymapcal`.
 
 ## `.pymapcal` Settings
 The app loads settings from:

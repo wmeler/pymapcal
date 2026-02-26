@@ -1,6 +1,7 @@
 # pymapcal
 
-MVP aplikacji Qt do kalibracji arkuszy na skanie mapy.
+MVP aplikacji Qt do kalibracji arkuszy w albumie map.
+Album projektu zawiera wiele skanów, a każdy skan zawiera własne arkusze.
 
 ## Wymagania
 - Python 3.10+
@@ -12,20 +13,24 @@ python3 main.py
 ```
 
 ## Obsługa
-1. `Plik -> Otwórz skan mapy` (tif/tiff/bmp/png/jpg/jpeg).
+1. `Plik -> Dodaj skan mapy` (tif/tiff/bmp/png/jpg/jpeg).
+   - lub `Plik -> Importuj MAP...` aby zaimportować kalibrację z plików OziExplorer `.map`.
+   - jeśli wiele plików `.map` wskazuje ten sam obraz skanu, skan pojawi się w albumie tylko raz, a każdy plik `.map` doda kolejny arkusz.
 2. Kliknij `Nowy arkusz` i dodaj kolejne narożniki klikami na mapie.
 3. Kliknij `Zamknij arkusz` aby utworzyć wielokąt.
 4. `Dodaj punkt kalibracyjny` dodaje punkt kalibracyjny (max 9 na arkusz).
+   - `Dodaj punkt obrysu` dodaje punkt maski/obrysu bez punktu kalibracyjnego.
    - po kliknięciu współrzędne są automatycznie podpowiadane na podstawie bieżącej kalibracji,
    - możesz je ręcznie edytować.
    - podczas nanoszenia/przesuwania punktu kalibracyjnego widoczne są linie pozycji kursora.
 5. Punkty można przesuwać przeciągając myszą.
 6. W panelu bocznym:
-   - drzewo projektu: każdy arkusz ma gałęzie `Obrys kadrowania` oraz `Punkty kalibracyjne`,
+   - drzewo projektu: `Skan -> Arkusze -> (Obrys kadrowania / Punkty kalibracyjne)`,
    - kliknięcie elementu drzewa zaznacza odpowiedni arkusz/punkt na mapie,
+   - `Usuń zaznaczony punkt` usuwa aktualny punkt kalibracyjny lub punkt obrysu,
    - przycisk `Dodaj punkt kalibracji do obrysu` pozwala użyć punktu kalibracyjnego jako punktu kadrowania,
    - edytuj nazwę i skalę zaznaczonego arkusza,
-   - dla zaznaczonego punktu wpisz `Lon` i `Lat` (obsługiwane formaty poniżej).
+   - dla zaznaczonego punktu wpisz `Lat` i `Lon`, a potem kliknij `Zapisz punkt` (z walidacją formatu).
 7. Pasek statusu pokazuje pozycję kursora w pikselach i przybliżoną pozycję geo.
 8. Pan i zoom:
    - rolka myszy: zoom względem kursora,
@@ -37,7 +42,8 @@ python3 main.py
   - z 2 punktów: transformacja podobieństwa (obrót + skala + przesunięcie),
   - z 3+ punktów: dopasowanie afiniczne (least squares).
 - Linie obrysu mają stałą grubość ekranową (nie skalują się przy zoom).
-- `Plik -> Zapisz projekt` / `Wczytaj projekt` zapisuje dane arkuszy do JSON.
+- `Plik -> Zapisz` / `Zapisz jako...` / `Wczytaj album` operuje na całym albumie (zbiorze skanów).
+- `Ustawienia -> Edytuj ustawienia...` pozwala zmienić parametry wyświetlania i język oraz zapisać je do `.pymapcal`.
 - `Plik -> Zapisz` zapisuje do aktualnie otwartego projektu (bez pytania),
 - `Plik -> Zapisz jako...` zapisuje pod nową nazwą/ścieżką.
 
