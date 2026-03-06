@@ -1,5 +1,8 @@
 {
   "language": "pl",
+  "imgkap_path": "/home/womeler/imgkap/imgkap",
+  "imgkap_work_dir": "/home/womeler/imgkap/tmp/pymapcal",
+  "kap_sounding_datum": "UNKNOWN",
   "display": {
     "outline_width": 1,
     "outline_selected_width": 2,

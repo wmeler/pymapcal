@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -32,6 +33,14 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
+)
+
+from kap_export import (
+    KapExportJob,
+    KapPolygonPoint,
+    KapReference,
+    run_kap_export_jobs,
+    sanitize_kap_stem,
 )
 
 TRANSLATIONS = {
@@ -70,6 +79,8 @@ TRANSLATIONS = {
         "menu_save_as": "Zapisz jako...",
         "menu_load_project": "Wczytaj album",
         "menu_import_map": "Importuj MAP...",
+        "menu_export_kap": "Eksportuj KAP...",
+        "menu_export_all_kap": "Eksportuj wszystkie arkusze do KAP...",
         "menu_settings": "Ustawienia",
         "menu_edit_settings": "Edytuj ustawienia...",
         "menu_help": "Pomoc",
@@ -109,6 +120,7 @@ TRANSLATIONS = {
         "dialog_load_project": "Wczytaj album",
         "dialog_import_map": "Importuj pliki MAP",
         "dialog_map_filter": "Ozi Map (*.map)",
+        "dialog_export_kap": "Wybierz katalog docelowy KAP",
         "error_load_project": "Nie udało się wczytać projektu:\n{error}",
         "error_open_project_image": "Nie udało się otworzyć obrazu zapisanego w projekcie.",
         "warning_title": "Uwaga",
@@ -123,8 +135,28 @@ TRANSLATIONS = {
         "point_kind_calibration": "kalibracyjny",
         "import_summary_title": "Import MAP",
         "import_summary": "Zaimportowano: {ok}\nBłędy: {fail}",
+        "export_title": "Eksport KAP",
+        "export_no_scan": "Brak aktywnego skanu do eksportu.",
+        "export_no_scans": "Album nie zawiera skanów do eksportu.",
+        "export_no_sheets": "Aktywny skan nie zawiera arkuszy.",
+        "export_no_sheets_all": "Album nie zawiera arkuszy do eksportu.",
+        "export_image_missing": "Nie znaleziono pliku obrazu skanu: {path}",
+        "export_image_open_error": "Nie udało się odczytać rozmiaru obrazu skanu.",
+        "export_sheet_scale_invalid": "Arkusz \"{name}\": niepoprawna skala \"{scale}\".",
+        "export_sheet_corners_missing": "Arkusz \"{name}\": obrys musi mieć co najmniej 3 punkty.",
+        "export_sheet_geo_missing": "Arkusz \"{name}\": brak współrzędnych geo dla punktów obrysu.",
+        "export_sheet_imgkap_failed": "Arkusz \"{name}\": imgkap zwrócił błąd.",
+        "export_sheet_imgkap_missing": "Nie znaleziono binarki imgkap: {path}",
+        "export_summary": "Eksport zakończony. OK: {ok}, błędy: {fail}\nKatalog: {out}",
+        "export_progress_title": "Eksport KAP",
+        "export_progress_label": "Generowanie KAP ({current}/{total}): {name}",
+        "export_progress_cancel": "Anuluj",
+        "export_cancelled": "Eksport przerwany przez użytkownika ({done}/{total}).\nKatalog: {out}",
         "settings_dialog_title": "Ustawienia programu",
         "settings_field_language": "Język",
+        "settings_field_imgkap_path": "Ścieżka do binarki imgkap",
+        "settings_field_sounding_datum": "KAP soundingDatum",
+        "settings_field_imgkap_work_dir": "Katalog debug imgkap (tmp+log)",
         "settings_lang_pl": "Polski",
         "settings_lang_en": "English",
         "settings_field_outline_width": "Grubość obrysu",
@@ -181,6 +213,8 @@ TRANSLATIONS = {
         "menu_save_as": "Save as...",
         "menu_load_project": "Load album",
         "menu_import_map": "Import MAP...",
+        "menu_export_kap": "Export KAP...",
+        "menu_export_all_kap": "Export all sheets to KAP...",
         "menu_settings": "Settings",
         "menu_edit_settings": "Edit settings...",
         "menu_help": "Help",
@@ -220,6 +254,7 @@ TRANSLATIONS = {
         "dialog_load_project": "Load album",
         "dialog_import_map": "Import MAP files",
         "dialog_map_filter": "Ozi Map (*.map)",
+        "dialog_export_kap": "Select output directory for KAP",
         "error_load_project": "Failed to load project:\n{error}",
         "error_open_project_image": "Failed to open image stored in project.",
         "warning_title": "Warning",
@@ -234,8 +269,28 @@ TRANSLATIONS = {
         "point_kind_calibration": "calibration",
         "import_summary_title": "MAP import",
         "import_summary": "Imported: {ok}\nFailed: {fail}",
+        "export_title": "KAP export",
+        "export_no_scan": "No active scan to export.",
+        "export_no_scans": "Album does not contain scans to export.",
+        "export_no_sheets": "Current scan has no sheets.",
+        "export_no_sheets_all": "Album does not contain sheets to export.",
+        "export_image_missing": "Scan image file not found: {path}",
+        "export_image_open_error": "Failed to read scan image dimensions.",
+        "export_sheet_scale_invalid": "Sheet \"{name}\": invalid scale \"{scale}\".",
+        "export_sheet_corners_missing": "Sheet \"{name}\": crop outline must have at least 3 points.",
+        "export_sheet_geo_missing": "Sheet \"{name}\": missing geo coordinates for outline points.",
+        "export_sheet_imgkap_failed": "Sheet \"{name}\": imgkap returned an error.",
+        "export_sheet_imgkap_missing": "imgkap executable not found: {path}",
+        "export_summary": "Export finished. OK: {ok}, errors: {fail}\nDirectory: {out}",
+        "export_progress_title": "KAP export",
+        "export_progress_label": "Generating KAP ({current}/{total}): {name}",
+        "export_progress_cancel": "Cancel",
+        "export_cancelled": "Export canceled by user ({done}/{total}).\nDirectory: {out}",
         "settings_dialog_title": "Application settings",
         "settings_field_language": "Language",
+        "settings_field_imgkap_path": "Path to imgkap executable",
+        "settings_field_sounding_datum": "KAP soundingDatum",
+        "settings_field_imgkap_work_dir": "imgkap debug directory (tmp+log)",
         "settings_lang_pl": "Polish",
         "settings_lang_en": "English",
         "settings_field_outline_width": "Outline width",
@@ -425,7 +480,7 @@ class DisplaySettings:
         }
 
 
-def load_display_settings() -> tuple[DisplaySettings, str, Optional[Path], Optional[str]]:
+def load_display_settings() -> tuple[DisplaySettings, str, Optional[Path], str, str, str, Optional[str]]:
     candidates = [Path.cwd() / ".pymapcal", Path.home() / ".pymapcal"]
     for path in candidates:
         if not path.exists():
@@ -433,18 +488,35 @@ def load_display_settings() -> tuple[DisplaySettings, str, Optional[Path], Optio
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
-                return DisplaySettings(), "pl", path, t("pl", "settings_json_object")
+                return DisplaySettings(), "pl", path, "imgkap", "UNKNOWN", "", t("pl", "settings_json_object")
             lang = raw.get("language", "pl")
             if lang not in ("pl", "en"):
                 lang = "pl"
+            imgkap_path = raw.get("imgkap_path", "imgkap")
+            if not isinstance(imgkap_path, str) or not imgkap_path.strip():
+                imgkap_path = "imgkap"
+            sounding_datum = raw.get("kap_sounding_datum", "UNKNOWN")
+            if not isinstance(sounding_datum, str) or not sounding_datum.strip():
+                sounding_datum = "UNKNOWN"
+            imgkap_work_dir = raw.get("imgkap_work_dir", "")
+            if not isinstance(imgkap_work_dir, str):
+                imgkap_work_dir = ""
             if isinstance(raw.get("display"), dict):
                 source = raw["display"]
             else:
                 source = raw
-            return DisplaySettings.from_dict(source), lang, path, None
+            return (
+                DisplaySettings.from_dict(source),
+                lang,
+                path,
+                imgkap_path.strip(),
+                sounding_datum.strip(),
+                imgkap_work_dir.strip(),
+                None,
+            )
         except Exception as exc:
-            return DisplaySettings(), "pl", path, t("pl", "settings_load_error", error=exc)
-    return DisplaySettings(), "pl", None, None
+            return DisplaySettings(), "pl", path, "imgkap", "UNKNOWN", "", t("pl", "settings_load_error", error=exc)
+    return DisplaySettings(), "pl", None, "imgkap", "UNKNOWN", "", None
 
 
 def point_in_polygon(x: float, y: float, polygon: list[CalibrationPoint]) -> bool:
@@ -801,6 +873,26 @@ def parse_geo_coordinate(value: str, kind: str) -> Optional[float]:
     return result
 
 
+def parse_scale_value(value: str) -> Optional[int]:
+    text = value.strip()
+    if not text:
+        return None
+    compact = text.replace(" ", "").replace("\u00A0", "")
+    for sep in (":", "/"):
+        if sep in compact:
+            compact = compact.split(sep)[-1]
+    digits = "".join(ch for ch in compact if ch.isdigit())
+    if not digits:
+        return None
+    try:
+        out = int(digits)
+    except ValueError:
+        return None
+    if out <= 0:
+        return None
+    return out
+
+
 class MapCanvas(QWidget):
     cursorMoved = Signal(float, float, object)
     selectionChanged = Signal(object, object)
@@ -1099,7 +1191,15 @@ class MapCanvas(QWidget):
             if self.selected_sheet is not None:
                 cal_count = sum(1 for p in self.selected_sheet.points if not p.is_corner)
                 if cal_count >= 9:
-                    QMessageBox.information(self, t(self.lang, "limit_title"), t(self.lang, "limit_cal_points"))
+                    msg = QMessageBox(self)
+                    msg.setIcon(QMessageBox.Information)
+                    msg.setWindowTitle(t(self.lang, "limit_title"))
+                    msg.setText(t(self.lang, "limit_cal_points"))
+                    msg.setWindowModality(Qt.ApplicationModal)
+                    app = QApplication.instance()
+                    if app is not None and app.applicationState() == Qt.ApplicationState.ApplicationActive:
+                        msg.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+                    msg.exec()
                     return
                 pred = self.geo_for_cursor(x, y)
                 new_point = CalibrationPoint(x=x, y=y, is_corner=False)
@@ -1283,7 +1383,15 @@ class MapCanvas(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.display_settings, self.lang, self.display_settings_path, settings_error = load_display_settings()
+        (
+            self.display_settings,
+            self.lang,
+            self.display_settings_path,
+            self.imgkap_path,
+            self.kap_sounding_datum,
+            self.imgkap_work_dir,
+            settings_error,
+        ) = load_display_settings()
         self.base_title = t(self.lang, "title")
         self.setWindowTitle(self.base_title)
         self.resize(1400, 900)
@@ -1321,12 +1429,97 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.statusBar().showMessage(t(self.lang, "ready"))
         self.build_menu()
+        self.refresh_editors()
         self.update_window_title()
         if settings_error:
-            QMessageBox.warning(self, t(self.lang, "settings_title"), settings_error)
+            self.show_warning(t(self.lang, "settings_title"), settings_error)
 
     def tr(self, key: str, **kwargs) -> str:
         return t(self.lang, key, **kwargs)
+
+    def prepare_dialog(self, dialog) -> None:
+        dialog.setWindowModality(Qt.ApplicationModal)
+        app = QApplication.instance()
+        if app is not None and app.applicationState() == Qt.ApplicationState.ApplicationActive:
+            dialog.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+
+    def show_warning(self, title: str, text: str) -> None:
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        self.prepare_dialog(msg)
+        msg.exec()
+
+    def show_information(self, title: str, text: str) -> None:
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        self.prepare_dialog(msg)
+        msg.exec()
+
+    def show_critical(self, title: str, text: str) -> None:
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Critical)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        self.prepare_dialog(msg)
+        msg.exec()
+
+    def ask_yes_no(self, title: str, text: str, default_button=QMessageBox.No) -> bool:
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg.setDefaultButton(default_button)
+        self.prepare_dialog(msg)
+        return msg.exec() == QMessageBox.Yes
+
+    def get_open_file_name(self, title: str, start_dir: str, file_filter: str) -> tuple[str, str]:
+        dlg = QFileDialog(self, title, start_dir, file_filter)
+        dlg.setFileMode(QFileDialog.ExistingFile)
+        dlg.setAcceptMode(QFileDialog.AcceptOpen)
+        dlg.setNameFilter(file_filter)
+        dlg.setOption(QFileDialog.DontUseNativeDialog, True)
+        self.prepare_dialog(dlg)
+        if dlg.exec() == QDialog.Accepted and dlg.selectedFiles():
+            return dlg.selectedFiles()[0], dlg.selectedNameFilter()
+        return "", file_filter
+
+    def get_open_file_names(self, title: str, start_dir: str, file_filter: str) -> tuple[list[str], str]:
+        dlg = QFileDialog(self, title, start_dir, file_filter)
+        dlg.setFileMode(QFileDialog.ExistingFiles)
+        dlg.setAcceptMode(QFileDialog.AcceptOpen)
+        dlg.setNameFilter(file_filter)
+        dlg.setOption(QFileDialog.DontUseNativeDialog, True)
+        self.prepare_dialog(dlg)
+        if dlg.exec() == QDialog.Accepted:
+            return dlg.selectedFiles(), dlg.selectedNameFilter()
+        return [], file_filter
+
+    def get_save_file_name(self, title: str, start_path: str, file_filter: str) -> tuple[str, str]:
+        dlg = QFileDialog(self, title, start_path, file_filter)
+        dlg.setFileMode(QFileDialog.AnyFile)
+        dlg.setAcceptMode(QFileDialog.AcceptSave)
+        dlg.setNameFilter(file_filter)
+        dlg.setOption(QFileDialog.DontUseNativeDialog, True)
+        self.prepare_dialog(dlg)
+        if dlg.exec() == QDialog.Accepted and dlg.selectedFiles():
+            return dlg.selectedFiles()[0], dlg.selectedNameFilter()
+        return "", file_filter
+
+    def get_existing_directory(self, title: str, start_dir: str) -> str:
+        dlg = QFileDialog(self, title, start_dir)
+        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setOption(QFileDialog.ShowDirsOnly, True)
+        dlg.setAcceptMode(QFileDialog.AcceptOpen)
+        dlg.setOption(QFileDialog.DontUseNativeDialog, True)
+        self.prepare_dialog(dlg)
+        if dlg.exec() == QDialog.Accepted and dlg.selectedFiles():
+            return dlg.selectedFiles()[0]
+        return ""
 
     @staticmethod
     def normalize_scan_path(path_text: str) -> str:
@@ -1407,6 +1600,7 @@ class MainWindow(QMainWindow):
         discard_btn = msg.addButton(QMessageBox.Discard)
         cancel_btn = msg.addButton(QMessageBox.Cancel)
         msg.setDefaultButton(save_btn)
+        self.prepare_dialog(msg)
         msg.exec()
         clicked = msg.clickedButton()
 
@@ -1447,13 +1641,13 @@ class MainWindow(QMainWindow):
         scan_path = Path(scan.image_path) if scan.image_path else None
         if scan_path and scan_path.exists():
             if not self.canvas.set_image(scan_path):
-                QMessageBox.warning(self, self.tr("warning_title"), self.tr("warning_missing_scan_image", path=str(scan_path)))
+                self.show_warning(self.tr("warning_title"), self.tr("warning_missing_scan_image", path=str(scan_path)))
                 self.canvas.pixmap = QPixmap()
                 self.canvas.image_path = scan_path
                 self.canvas.updateGeometry()
         elif scan_path is not None:
             missing = str(scan_path) if scan_path else "-"
-            QMessageBox.warning(self, self.tr("warning_title"), self.tr("warning_missing_scan_image", path=missing))
+            self.show_warning(self.tr("warning_title"), self.tr("warning_missing_scan_image", path=missing))
             self.canvas.pixmap = QPixmap()
             self.canvas.image_path = scan_path
             self.canvas.updateGeometry()
@@ -1550,8 +1744,8 @@ class MainWindow(QMainWindow):
         self.meta_form = QFormLayout()
         self.name_edit = QLineEdit()
         self.scale_edit = QLineEdit()
-        self.name_edit.textEdited.connect(self.on_sheet_meta_changed)
-        self.scale_edit.textEdited.connect(self.on_sheet_meta_changed)
+        self.name_edit.textChanged.connect(self.on_sheet_meta_changed)
+        self.scale_edit.textChanged.connect(self.on_sheet_meta_changed)
         self.meta_form.addRow(self.tr("field_name"), self.name_edit)
         self.meta_form.addRow(self.tr("field_scale"), self.scale_edit)
         layout.addLayout(self.meta_form)
@@ -1580,6 +1774,14 @@ class MainWindow(QMainWindow):
         self.action_import_map = QAction(self.tr("menu_import_map"), self)
         self.action_import_map.triggered.connect(self.import_map_files)
         self.menu_file.addAction(self.action_import_map)
+
+        self.action_export_kap = QAction(self.tr("menu_export_kap"), self)
+        self.action_export_kap.triggered.connect(self.export_kap_current_scan)
+        self.menu_file.addAction(self.action_export_kap)
+
+        self.action_export_all_kap = QAction(self.tr("menu_export_all_kap"), self)
+        self.action_export_all_kap.triggered.connect(self.export_kap_all_scans)
+        self.menu_file.addAction(self.action_export_all_kap)
 
         self.action_save_proj = QAction(self.tr("menu_save"), self)
         self.action_save_proj.triggered.connect(self.save_project)
@@ -1642,6 +1844,8 @@ class MainWindow(QMainWindow):
         self.menu_file.setTitle(self.tr("menu_file"))
         self.action_open_img.setText(self.tr("menu_open_scan"))
         self.action_import_map.setText(self.tr("menu_import_map"))
+        self.action_export_kap.setText(self.tr("menu_export_kap"))
+        self.action_export_all_kap.setText(self.tr("menu_export_all_kap"))
         self.action_save_proj.setText(self.tr("menu_save"))
         self.action_save_as_proj.setText(self.tr("menu_save_as"))
         self.action_load_proj.setText(self.tr("menu_load_project"))
@@ -1681,6 +1885,7 @@ class MainWindow(QMainWindow):
         dlg = QDialog(self)
         dlg.setWindowTitle(self.tr("settings_dialog_title"))
         dlg.resize(700, 700)
+        self.prepare_dialog(dlg)
         layout = QVBoxLayout(dlg)
         form = QFormLayout()
 
@@ -1689,6 +1894,12 @@ class MainWindow(QMainWindow):
         lang_combo.addItem(self.tr("settings_lang_en"), "en")
         lang_combo.setCurrentIndex(0 if self.lang == "pl" else 1)
         form.addRow(self.tr("settings_field_language"), lang_combo)
+        imgkap_path_edit = QLineEdit(self.imgkap_path, dlg)
+        form.addRow(self.tr("settings_field_imgkap_path"), imgkap_path_edit)
+        imgkap_work_dir_edit = QLineEdit(self.imgkap_work_dir, dlg)
+        form.addRow(self.tr("settings_field_imgkap_work_dir"), imgkap_work_dir_edit)
+        sounding_datum_edit = QLineEdit(self.kap_sounding_datum, dlg)
+        form.addRow(self.tr("settings_field_sounding_datum"), sounding_datum_edit)
 
         def make_spin(value: int, min_v: int, max_v: int) -> QSpinBox:
             s = QSpinBox(dlg)
@@ -1737,10 +1948,13 @@ class MainWindow(QMainWindow):
 
         color_text = guide_color.text().strip()
         if not QColor(color_text).isValid():
-            QMessageBox.warning(self, self.tr("error_title"), self.tr("settings_invalid_color"))
+            self.show_warning(self.tr("error_title"), self.tr("settings_invalid_color"))
             return
 
         new_lang = lang_combo.currentData()
+        new_imgkap_path = imgkap_path_edit.text().strip() or "imgkap"
+        new_imgkap_work_dir = imgkap_work_dir_edit.text().strip()
+        new_sounding_datum = sounding_datum_edit.text().strip() or "UNKNOWN"
         new_settings = DisplaySettings(
             outline_width=outline_width.value(),
             outline_selected_width=outline_sel_width.value(),
@@ -1761,16 +1975,22 @@ class MainWindow(QMainWindow):
         settings_path = self._settings_path_for_write(self.display_settings_path)
         payload = {
             "language": new_lang,
+            "imgkap_path": new_imgkap_path,
+            "imgkap_work_dir": new_imgkap_work_dir,
+            "kap_sounding_datum": new_sounding_datum,
             "display": new_settings.to_dict(),
         }
         try:
             settings_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as exc:
-            QMessageBox.critical(self, self.tr("error_title"), self.tr("settings_save_error", error=exc))
+            self.show_critical(self.tr("error_title"), self.tr("settings_save_error", error=exc))
             return
 
         self.display_settings = new_settings
         self.display_settings_path = settings_path
+        self.imgkap_path = new_imgkap_path
+        self.imgkap_work_dir = new_imgkap_work_dir
+        self.kap_sounding_datum = new_sounding_datum
         self.canvas.apply_display_settings(new_settings)
 
         lang_changed = new_lang != self.lang
@@ -1789,17 +2009,18 @@ class MainWindow(QMainWindow):
             preferred = base / "README.pl.md"
         readme_path = preferred if preferred.exists() else (base / "README.md")
         if not readme_path.exists():
-            QMessageBox.warning(self, self.tr("help_title"), self.tr("help_missing_readme"))
+            self.show_warning(self.tr("help_title"), self.tr("help_missing_readme"))
             return
         try:
             content = readme_path.read_text(encoding="utf-8")
         except Exception as exc:
-            QMessageBox.critical(self, self.tr("help_title"), self.tr("help_read_error", error=exc))
+            self.show_critical(self.tr("help_title"), self.tr("help_read_error", error=exc))
             return
 
         dlg = QDialog(self)
         dlg.setWindowTitle(self.tr("help_dialog_title"))
         dlg.resize(900, 700)
+        self.prepare_dialog(dlg)
         layout = QVBoxLayout(dlg)
         viewer = QTextBrowser(dlg)
         viewer.setMarkdown(content)
@@ -1886,21 +2107,18 @@ class MainWindow(QMainWindow):
 
     def close_sheet_clicked(self) -> None:
         if not self.canvas.close_new_sheet():
-            QMessageBox.warning(self, self.tr("error_title"), self.tr("error_sheet_min_points"))
+            self.show_warning(self.tr("error_title"), self.tr("error_sheet_min_points"))
 
     def delete_sheet(self) -> None:
         idx = self.canvas.selected_sheet_idx
         sheet = self.canvas.selected_sheet
         if idx is None or sheet is None:
             return
-        answer = QMessageBox.question(
-            self,
+        if not self.ask_yes_no(
             self.tr("confirm_title"),
             self.tr("confirm_delete_sheet_named", name=sheet.name),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if answer != QMessageBox.Yes:
+            default_button=QMessageBox.No,
+        ):
             return
         del self.canvas.sheets[idx]
         if self.canvas.sheets:
@@ -1927,14 +2145,11 @@ class MainWindow(QMainWindow):
             if i == idx:
                 break
 
-        answer = QMessageBox.question(
-            self,
+        if not self.ask_yes_no(
             self.tr("confirm_title"),
             self.tr("confirm_delete_point_named", kind=kind, index=kind_index),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if answer != QMessageBox.Yes:
+            default_button=QMessageBox.No,
+        ):
             return
         del sheet.points[idx]
         self.canvas.selected_point_idx = None
@@ -1947,14 +2162,11 @@ class MainWindow(QMainWindow):
             return
         if point.is_corner:
             return
-        answer = QMessageBox.question(
-            self,
+        if not self.ask_yes_no(
             self.tr("link_point_title"),
             self.tr("link_point_question"),
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes,
-        )
-        if answer != QMessageBox.Yes:
+            default_button=QMessageBox.Yes,
+        ):
             return
         point.is_corner = True
         self.refresh_sheet_list()
@@ -2158,6 +2370,10 @@ class MainWindow(QMainWindow):
     def refresh_editors(self) -> None:
         sheet = self.canvas.selected_sheet
         point = self.canvas.selected_point
+        has_scan = self.current_scan is not None
+        has_sheet = sheet is not None
+        has_point = point is not None
+        point_is_corner = bool(point.is_corner) if point is not None else False
 
         self.name_edit.blockSignals(True)
         self.scale_edit.blockSignals(True)
@@ -2186,17 +2402,39 @@ class MainWindow(QMainWindow):
         self.lat_edit.blockSignals(False)
         self.lon_edit.setStyleSheet("")
         self.lat_edit.setStyleSheet("")
-        self.btn_save_point.setEnabled(point is not None)
+
+        # Context-sensitive controls.
+        self.name_edit.setEnabled(has_sheet)
+        self.scale_edit.setEnabled(has_sheet)
+        self.lon_edit.setEnabled(has_point)
+        self.lat_edit.setEnabled(has_point)
+        self.btn_save_point.setEnabled(has_point)
+
+        self.btn_delete_sheet.setEnabled(has_sheet)
+        self.btn_delete_point.setEnabled(has_point)
+        self.btn_use_as_corner.setEnabled(has_point and (not point_is_corner))
+
+        self.btn_new_sheet.setEnabled(has_scan)
+        self.btn_add_cal.setEnabled(has_scan and has_sheet)
+        self.btn_add_outline.setEnabled(has_scan and has_sheet)
+        self.btn_select_mode.setEnabled(has_scan)
+        self.btn_zoom_in.setEnabled(has_scan)
+        self.btn_zoom_out.setEnabled(has_scan)
+        self.btn_zoom_reset.setEnabled(has_scan)
+
         self.edit_point_key = self.current_selected_point_key()
         self._editor_baseline_lat = self.lat_edit.text().strip()
         self._editor_baseline_lon = self.lon_edit.text().strip()
 
-    def on_sheet_meta_changed(self) -> None:
+    def flush_current_sheet_meta(self) -> None:
         sheet = self.canvas.selected_sheet
         if sheet is None:
             return
         sheet.name = self.name_edit.text().strip() or self.tr("sheet_default")
         sheet.scale = self.scale_edit.text().strip()
+
+    def on_sheet_meta_changed(self, *_args) -> None:
+        self.flush_current_sheet_meta()
         self.refresh_sheet_list()
         self.canvas.update()
 
@@ -2229,8 +2467,7 @@ class MainWindow(QMainWindow):
                     details.append(self.tr("error_lon_format_msg"))
                 if lat_text and lat is None:
                     details.append(self.tr("error_lat_format_msg"))
-                QMessageBox.warning(
-                    self,
+                self.show_warning(
                     self.tr("error_point_save_title"),
                     self.tr("error_point_save_msg") + "\n\n" + "\n".join(details),
                 )
@@ -2249,7 +2486,7 @@ class MainWindow(QMainWindow):
     def save_selected_point_geo(self) -> None:
         point = self.canvas.selected_point
         if point is None:
-            QMessageBox.warning(self, self.tr("error_title"), self.tr("error_point_not_selected"))
+            self.show_warning(self.tr("error_title"), self.tr("error_point_not_selected"))
             return
         if not self.save_editor_values_to_point(point, show_errors=True, show_grid_hint=True):
             return
@@ -2257,8 +2494,7 @@ class MainWindow(QMainWindow):
         self.canvas.update()
 
     def open_image(self) -> None:
-        path_str, _ = QFileDialog.getOpenFileName(
-            self,
+        path_str, _ = self.get_open_file_name(
             self.tr("dialog_pick_scan"),
             "",
             self.tr("dialog_image_filter"),
@@ -2268,7 +2504,7 @@ class MainWindow(QMainWindow):
         path = Path(path_str)
         test_pix = QPixmap(str(path))
         if test_pix.isNull():
-            QMessageBox.critical(self, self.tr("error_title"), self.tr("error_open_image"))
+            self.show_critical(self.tr("error_title"), self.tr("error_open_image"))
             return
         new_scan = Scan(
             name=path.stem,
@@ -2283,8 +2519,7 @@ class MainWindow(QMainWindow):
         self.update_window_title()
 
     def import_map_files(self) -> None:
-        file_list, _ = QFileDialog.getOpenFileNames(
-            self,
+        file_list, _ = self.get_open_file_names(
             self.tr("dialog_import_map"),
             "",
             self.tr("dialog_map_filter"),
@@ -2321,13 +2556,264 @@ class MainWindow(QMainWindow):
             self.set_current_scan(last_scan_idx)
             self.project_path = None
             self.update_window_title()
-        QMessageBox.information(
-            self,
+        self.show_information(
             self.tr("import_summary_title"),
             self.tr("import_summary", ok=ok, fail=fail),
         )
 
+    @staticmethod
+    def unique_kap_path(out_dir: Path, used_names: set[str], stem: str) -> Path:
+        base = sanitize_kap_stem(stem, fallback="sheet")
+        candidate = base
+        idx = 2
+        while candidate.lower() in used_names or (out_dir / f"{candidate}.kap").exists():
+            candidate = f"{base}_{idx}"
+            idx += 1
+        used_names.add(candidate.lower())
+        return out_dir / f"{candidate}.kap"
+
+    @staticmethod
+    def point_geo_or_transform(
+        point: CalibrationPoint,
+        transform: Optional[GeoTransform],
+    ) -> Optional[tuple[float, float]]:
+        if point.lon is not None and point.lat is not None:
+            return float(point.lon), float(point.lat)
+        if transform is None:
+            return None
+        return transform.pixel_to_geo(point.x, point.y)
+
+    def default_export_dir(self) -> Path:
+        scan = self.current_scan
+        if scan is not None and scan.image_path:
+            p = Path(scan.image_path).expanduser()
+            if p.parent.exists():
+                return p.parent
+        return Path.cwd()
+
+    def collect_kap_jobs_for_scans(self, scans: list[Scan], out_dir: Path) -> tuple[list[KapExportJob], list[str]]:
+        jobs: list[KapExportJob] = []
+        details: list[str] = []
+        used_stems: set[str] = set()
+
+        for scan in scans:
+            scan_name = scan.name.strip() or (Path(scan.image_path).stem if scan.image_path else "scan")
+            if not scan.sheets:
+                continue
+            image_path = Path(scan.image_path).expanduser()
+            if not image_path.exists():
+                details.append(f"[{scan_name}] " + self.tr("export_image_missing", path=str(image_path)))
+                continue
+            px = QPixmap(str(image_path))
+            if px.isNull():
+                details.append(f"[{scan_name}] " + self.tr("export_image_open_error"))
+                continue
+            width = px.width()
+            height = px.height()
+
+            for idx, sheet in enumerate(scan.sheets, start=1):
+                sheet_name = sheet.name.strip() or f"{self.tr('sheet_default')} {idx}"
+                sheet_label = f"{scan_name}/{sheet_name}"
+                scale_value = parse_scale_value(sheet.scale)
+                if scale_value is None:
+                    details.append(
+                        self.tr(
+                            "export_sheet_scale_invalid",
+                            name=sheet_label,
+                            scale=sheet.scale if sheet.scale else "-",
+                        )
+                    )
+                    continue
+
+                corners = [p for p in sheet.points if p.is_corner]
+                if len(corners) < 3:
+                    details.append(self.tr("export_sheet_corners_missing", name=sheet_label))
+                    continue
+
+                transform = build_geo_transform(sheet.points)
+                polygon: list[KapPolygonPoint] = []
+                missing_corner_geo = False
+                for p in corners:
+                    geo = self.point_geo_or_transform(p, transform)
+                    if geo is None:
+                        missing_corner_geo = True
+                        break
+                    polygon.append(
+                        KapPolygonPoint(
+                            pixel_x=p.x,
+                            pixel_y=p.y,
+                            lon=geo[0],
+                            lat=geo[1],
+                        )
+                    )
+                if missing_corner_geo:
+                    details.append(self.tr("export_sheet_geo_missing", name=sheet_label))
+                    continue
+
+                refs: list[KapReference] = []
+                for p in sheet.points:
+                    if p.is_corner:
+                        continue
+                    geo = self.point_geo_or_transform(p, transform)
+                    if geo is None:
+                        continue
+                    refs.append(
+                        KapReference(
+                            pixel_x=p.x,
+                            pixel_y=p.y,
+                            lon=geo[0],
+                            lat=geo[1],
+                        )
+                    )
+
+                out_path = self.unique_kap_path(out_dir, used_stems, f"{scan_name}_{sheet_name}")
+                jobs.append(
+                    KapExportJob(
+                        sheet_name=sheet_label,
+                        image_path=image_path,
+                        output_path=out_path,
+                        width=width,
+                        height=height,
+                        scale=scale_value,
+                        polygon=polygon,
+                        references=refs,
+                    )
+                )
+
+        return jobs, details
+
+    def run_kap_export_and_show_summary(self, jobs: list[KapExportJob], details: list[str], out_dir: Path) -> None:
+        if not jobs:
+            self.show_warning(
+                self.tr("export_title"),
+                self.tr("export_summary", ok=0, fail=len(details), out=str(out_dir))
+                + ("\n\n" + "\n".join(details) if details else ""),
+            )
+            return
+
+        pre_fail = len(details)
+        debug_temp_dir = Path(self.imgkap_work_dir).expanduser() if self.imgkap_work_dir else None
+        progress = QProgressDialog(self)
+        progress.setWindowTitle(self.tr("export_progress_title"))
+        progress.setLabelText(self.tr("export_progress_label", current=0, total=len(jobs), name="-"))
+        progress.setCancelButtonText(self.tr("export_progress_cancel"))
+        progress.setMinimum(0)
+        progress.setMaximum(len(jobs))
+        progress.setValue(0)
+        self.prepare_dialog(progress)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.show()
+        QApplication.processEvents()
+        cancel_requested = False
+
+        def on_cancel() -> None:
+            nonlocal cancel_requested
+            cancel_requested = True
+
+        progress.canceled.connect(on_cancel)
+
+        def on_progress(done: int, total: int, name: str) -> None:
+            progress.setLabelText(self.tr("export_progress_label", current=done, total=total, name=name))
+            progress.setValue(done)
+            QApplication.processEvents()
+
+        def is_cancel_requested() -> bool:
+            QApplication.processEvents()
+            return cancel_requested or progress.wasCanceled()
+
+        try:
+            run_results = run_kap_export_jobs(
+                jobs=jobs,
+                imgkap_path=self.imgkap_path,
+                sounding_datum=self.kap_sounding_datum,
+                temp_dir=debug_temp_dir,
+                progress_cb=on_progress,
+                cancel_requested_cb=is_cancel_requested,
+            )
+        finally:
+            progress.close()
+        ok = 0
+        run_fail = 0
+        cancelled = False
+        imgkap_missing_reported = False
+        for result in run_results:
+            if result.success:
+                ok += 1
+                continue
+            if result.error == "cancelled":
+                cancelled = True
+                break
+            run_fail += 1
+            if result.error == "imgkap_not_found":
+                if not imgkap_missing_reported:
+                    details.append(self.tr("export_sheet_imgkap_missing", path=self.imgkap_path))
+                    imgkap_missing_reported = True
+                continue
+            details.append(self.tr("export_sheet_imgkap_failed", name=result.sheet_name))
+            if result.stderr:
+                details.append(f"  {result.stderr.splitlines()[0]}")
+            elif result.stdout:
+                details.append(f"  {result.stdout.splitlines()[0]}")
+        if not cancelled and (cancel_requested or progress.wasCanceled()) and len(run_results) < len(jobs):
+            cancelled = True
+
+        total_fail = pre_fail + run_fail
+        if cancelled:
+            summary = self.tr("export_cancelled", done=len(run_results), total=len(jobs), out=str(out_dir))
+        else:
+            summary = self.tr("export_summary", ok=ok, fail=total_fail, out=str(out_dir))
+        details_text = "\n".join(details[:40])
+        if cancelled or total_fail > 0 or details:
+            self.show_warning(
+                self.tr("export_title"),
+                summary + ("\n\n" + details_text if details_text else ""),
+            )
+        else:
+            self.show_information(self.tr("export_title"), summary)
+
+    def export_kap_current_scan(self) -> None:
+        self.flush_current_sheet_meta()
+        scan = self.current_scan
+        if scan is None:
+            self.show_warning(self.tr("export_title"), self.tr("export_no_scan"))
+            return
+        if not scan.sheets:
+            self.show_warning(self.tr("export_title"), self.tr("export_no_sheets"))
+            return
+
+        out_dir_str = self.get_existing_directory(
+            self.tr("dialog_export_kap"),
+            str(self.default_export_dir()),
+        )
+        if not out_dir_str:
+            return
+        out_dir = Path(out_dir_str)
+        jobs, details = self.collect_kap_jobs_for_scans([scan], out_dir)
+        self.run_kap_export_and_show_summary(jobs, details, out_dir)
+
+    def export_kap_all_scans(self) -> None:
+        self.flush_current_sheet_meta()
+        if not self.scans:
+            self.show_warning(self.tr("export_title"), self.tr("export_no_scans"))
+            return
+        if not any(scan.sheets for scan in self.scans):
+            self.show_warning(self.tr("export_title"), self.tr("export_no_sheets_all"))
+            return
+
+        out_dir_str = self.get_existing_directory(
+            self.tr("dialog_export_kap"),
+            str(self.default_export_dir()),
+        )
+        if not out_dir_str:
+            return
+        out_dir = Path(out_dir_str)
+        jobs, details = self.collect_kap_jobs_for_scans(self.scans, out_dir)
+        self.run_kap_export_and_show_summary(jobs, details, out_dir)
+
     def save_project(self) -> None:
+        self.flush_current_sheet_meta()
         if self.project_path is not None:
             self.write_project_to_path(self.project_path)
             return
@@ -2335,6 +2821,7 @@ class MainWindow(QMainWindow):
         self.save_project_as()
 
     def save_project_as(self) -> None:
+        self.flush_current_sheet_meta()
         current_scan = self.current_scan
         if current_scan and current_scan.image_path:
             suggested_path = Path(current_scan.image_path).with_suffix(".json")
@@ -2343,8 +2830,7 @@ class MainWindow(QMainWindow):
         else:
             suggested_path = Path.cwd() / self.tr("default_project_name")
 
-        path_str, _ = QFileDialog.getSaveFileName(
-            self,
+        path_str, _ = self.get_save_file_name(
             self.tr("dialog_save_as"),
             str(suggested_path),
             self.tr("dialog_project_filter"),
@@ -2366,8 +2852,7 @@ class MainWindow(QMainWindow):
         self.update_window_title()
 
     def load_project(self) -> None:
-        path_str, _ = QFileDialog.getOpenFileName(
-            self,
+        path_str, _ = self.get_open_file_name(
             self.tr("dialog_load_project"),
             "",
             self.tr("dialog_project_filter"),
@@ -2380,7 +2865,7 @@ class MainWindow(QMainWindow):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except Exception as exc:
-            QMessageBox.critical(self, self.tr("error_title"), self.tr("error_load_project", error=exc))
+            self.show_critical(self.tr("error_title"), self.tr("error_load_project", error=exc))
             return False
 
         loaded_scans: list[Scan] = []

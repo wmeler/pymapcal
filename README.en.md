@@ -16,6 +16,8 @@ python3 main.py
 1. `File -> Add map scan` (`tif/tiff/bmp/png/jpg/jpeg`).
    - or `File -> Import MAP...` to import calibration from OziExplorer `.map` files.
    - if multiple `.map` files point to the same scan image, the scan is added only once and each `.map` adds another sheet.
+   - `File -> Export KAP...` generates `.kap` files for all sheets of the active scan.
+   - `File -> Export all sheets to KAP...` generates `.kap` files for all sheets from all scans in the album.
 2. Click `New sheet` and add corner points by clicking on the map.
 3. Click `Close sheet` to create the polygon.
 4. `Add calibration point` adds a calibration point (max 9 per sheet).
@@ -45,7 +47,11 @@ python3 main.py
 - `File -> Save` writes to current project file (no prompt).
 - `File -> Save as...` writes to a new file/path.
 - `File -> Save` / `Save as...` / `Load album` operate on the whole album (all scans).
+- `File -> Export KAP...` exports sheets from the current scan into a selected output directory.
+  - each sheet must have scale set (for example `1:50000`),
+  - outline points must have geo coordinates (missing values are estimated from current calibration when possible).
 - `Settings -> Edit settings...` lets you edit display parameters and language, then save to `.pymapcal`.
+- `imgkap` executable location is configurable in `Settings -> Edit settings...`.
 
 ## `.pymapcal` Settings
 The app loads settings from:
@@ -56,11 +62,17 @@ File format: JSON (either direct keys or nested under `display`).
 
 i18n:
 - `language: "pl"` or `language: "en"`
+- `imgkap_path`: path to `imgkap` executable (for example `imgkap` or `/home/user/imgkap/imgkap`)
+- `imgkap_work_dir`: optional KAP export debug directory; when set, it stores `imgkap_calls.log` and all temporary files
+- `kap_sounding_datum`: `SD` value written to KAP header (for example `UNKNOWN`)
 
 Example:
 ```json
 {
   "language": "en",
+  "imgkap_path": "imgkap",
+  "imgkap_work_dir": "",
+  "kap_sounding_datum": "UNKNOWN",
   "display": {
     "outline_width": 2,
     "outline_selected_width": 3,

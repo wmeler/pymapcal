@@ -16,6 +16,8 @@ python3 main.py
 1. `Plik -> Dodaj skan mapy` (tif/tiff/bmp/png/jpg/jpeg).
    - lub `Plik -> Importuj MAP...` aby zaimportować kalibrację z plików OziExplorer `.map`.
    - jeśli wiele plików `.map` wskazuje ten sam obraz skanu, skan pojawi się w albumie tylko raz, a każdy plik `.map` doda kolejny arkusz.
+   - `Plik -> Eksportuj KAP...` generuje pliki `.kap` dla wszystkich arkuszy aktywnego skanu.
+   - `Plik -> Eksportuj wszystkie arkusze do KAP...` generuje `.kap` dla wszystkich arkuszy ze wszystkich skanów w albumie.
 2. Kliknij `Nowy arkusz` i dodaj kolejne narożniki klikami na mapie.
 3. Kliknij `Zamknij arkusz` aby utworzyć wielokąt.
 4. `Dodaj punkt kalibracyjny` dodaje punkt kalibracyjny (max 9 na arkusz).
@@ -43,7 +45,11 @@ python3 main.py
   - z 3+ punktów: dopasowanie afiniczne (least squares).
 - Linie obrysu mają stałą grubość ekranową (nie skalują się przy zoom).
 - `Plik -> Zapisz` / `Zapisz jako...` / `Wczytaj album` operuje na całym albumie (zbiorze skanów).
+- `Plik -> Eksportuj KAP...` eksportuje arkusze z bieżącego skanu do wskazanego katalogu.
+  - każdy arkusz musi mieć skalę (np. `1:50000`),
+  - punkty obrysu muszą mieć współrzędne geo (brakujące są wyliczane z bieżącej kalibracji, jeśli to możliwe).
 - `Ustawienia -> Edytuj ustawienia...` pozwala zmienić parametry wyświetlania i język oraz zapisać je do `.pymapcal`.
+- Ścieżka do binarki `imgkap` jest konfigurowalna w `Ustawienia -> Edytuj ustawienia...`.
 - `Plik -> Zapisz` zapisuje do aktualnie otwartego projektu (bez pytania),
 - `Plik -> Zapisz jako...` zapisuje pod nową nazwą/ścieżką.
 
@@ -56,11 +62,17 @@ Format pliku: JSON (może być bezpośrednio lub pod kluczem `display`).
 
 Obsługa i18n:
 - `language: "pl"` lub `language: "en"`
+- `imgkap_path`: ścieżka do binarki `imgkap` (np. `imgkap` lub `/home/user/imgkap/imgkap`)
+- `imgkap_work_dir`: opcjonalny katalog debug eksportu KAP; jeśli ustawiony, zapisuje tam log `imgkap_calls.log` i wszystkie pliki tymczasowe
+- `kap_sounding_datum`: wartość `SD` zapisywana w nagłówku KAP (np. `UNKNOWN`)
 
 Przykład:
 ```json
 {
   "language": "pl",
+  "imgkap_path": "imgkap",
+  "imgkap_work_dir": "",
+  "kap_sounding_datum": "UNKNOWN",
   "display": {
     "outline_width": 2,
     "outline_selected_width": 3,
