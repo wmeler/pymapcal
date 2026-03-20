@@ -12,32 +12,37 @@ A project album contains multiple scans, and each scan contains its own sheets.
 python3 main.py
 ```
 
+You can also pass a path as the first positional argument, for example `python3 main.py ./scan.tif`, `python3 main.py ./sheet.map`, or `python3 main.py ./project.json`.
+
 ## Usage
 1. `File -> Add map scan` (`tif/tiff/bmp/png/jpg/jpeg`).
    - or `File -> Import MAP...` to import calibration from OziExplorer `.map` files.
    - if multiple `.map` files point to the same scan image, the scan is added only once and each `.map` adds another sheet.
-   - `File -> Export KAP...` generates `.kap` files for all sheets of the active scan.
+   - `Sheet -> Export KAP...` generates `.kap` files for all sheets of the active scan.
    - `File -> Export all sheets to KAP...` generates `.kap` files for all sheets from all scans in the album.
-2. Click `New sheet` and add corner points by clicking on the map.
-3. Click `Close sheet` to create the polygon.
-4. `Add calibration point` adds a calibration point (max 9 per sheet).
-   - `Add outline point` adds a crop/mask point that is not a calibration point.
+2. Use `Sheet -> New sheet` and add corner points by clicking on the map.
+3. Add at least 3 outline points; after the third point the outline is treated as closed automatically.
+4. `Sheet -> Add calibration point` adds a calibration point (max 9 per sheet).
+   - `Sheet -> Add outline point` adds a crop/mask point that is not a calibration point.
    - after clicking, coordinates are auto-predicted from current calibration,
+   - if the click is close to a grid line implied by the sheet scale, the proposed calibration-point position is automatically snapped to that grid,
    - you can edit them manually,
    - when adding/moving a calibration point, cursor guide lines are shown.
+   - `Esc` exits calibration-point or outline-point add mode.
+   - each added calibration point appends a diagnostic case to `./geo_position_cases.jsonl`.
 5. Drag points to move them.
 6. In the side panel:
    - project tree: `Scan -> Sheets -> (Crop outline / Calibration points)`,
    - clicking a tree item selects the corresponding sheet/point on the map,
-   - `Delete selected point` removes current calibration/outline point,
-   - `Use calibration point in crop outline` allows reusing a calibration point as a crop point,
+   - the tree context menu (right click) lets you add/remove sheets and add/remove outline/calibration points depending on the selected node,
+   - `Sheet -> Use calibration point in crop outline` lets you reuse a calibration point as a crop point,
    - edit selected sheet name and scale,
    - edit `Lat` and `Lon` for selected point, then click `Save point` (with format validation).
 7. Status bar shows cursor position in pixels and approximate geo coordinates.
 8. Pan and zoom:
    - mouse wheel: zoom to cursor,
    - middle mouse button + drag: pan,
-   - `Zoom +`, `Zoom -`, `Zoom 100%` buttons in side panel.
+   - `View -> Zoom +`, `View -> Zoom -`, `View -> Zoom 100%`.
 
 ## Notes
 - Cursor geo position and grid are computed using:
@@ -47,11 +52,11 @@ python3 main.py
 - `File -> Save` writes to current project file (no prompt).
 - `File -> Save as...` writes to a new file/path.
 - `File -> Save` / `Save as...` / `Load album` operate on the whole album (all scans).
-- `File -> Export KAP...` exports sheets from the current scan into a selected output directory.
+- `Sheet -> Export KAP...` exports sheets from the current scan into a selected output directory.
   - each sheet must have scale set (for example `1:50000`),
   - outline points must have geo coordinates (missing values are estimated from current calibration when possible).
-- `Settings -> Edit settings...` lets you edit display parameters and language, then save to `.pymapcal`.
-- `imgkap` executable location is configurable in `Settings -> Edit settings...`.
+- `Tools -> Edit settings...` lets you edit display parameters and language, then save to `.pymapcal`.
+- `imgkap` executable location is configurable in `Tools -> Edit settings...`.
 
 ## `.pymapcal` Settings
 The app loads settings from:

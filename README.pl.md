@@ -12,32 +12,37 @@ Album projektu zawiera wiele skanów, a każdy skan zawiera własne arkusze.
 python3 main.py
 ```
 
+Możesz też podać ścieżkę jako pierwszy argument pozycyjny, np. `python3 main.py ./scan.tif`, `python3 main.py ./arkusz.map` albo `python3 main.py ./projekt.json`.
+
 ## Obsługa
 1. `Plik -> Dodaj skan mapy` (tif/tiff/bmp/png/jpg/jpeg).
    - lub `Plik -> Importuj MAP...` aby zaimportować kalibrację z plików OziExplorer `.map`.
    - jeśli wiele plików `.map` wskazuje ten sam obraz skanu, skan pojawi się w albumie tylko raz, a każdy plik `.map` doda kolejny arkusz.
-   - `Plik -> Eksportuj KAP...` generuje pliki `.kap` dla wszystkich arkuszy aktywnego skanu.
+   - `Arkusz -> Eksportuj KAP...` generuje pliki `.kap` dla wszystkich arkuszy aktywnego skanu.
    - `Plik -> Eksportuj wszystkie arkusze do KAP...` generuje `.kap` dla wszystkich arkuszy ze wszystkich skanów w albumie.
-2. Kliknij `Nowy arkusz` i dodaj kolejne narożniki klikami na mapie.
-3. Kliknij `Zamknij arkusz` aby utworzyć wielokąt.
-4. `Dodaj punkt kalibracyjny` dodaje punkt kalibracyjny (max 9 na arkusz).
-   - `Dodaj punkt obrysu` dodaje punkt maski/obrysu bez punktu kalibracyjnego.
+2. Wybierz `Arkusz -> Nowy arkusz` i dodaj kolejne narożniki klikami na mapie.
+3. Dodaj co najmniej 3 punkty obrysu; po trzecim punkcie obrys jest traktowany jako domknięty automatycznie.
+4. `Arkusz -> Dodaj punkt kalibracyjny` dodaje punkt kalibracyjny (max 9 na arkusz).
+   - `Arkusz -> Dodaj punkt obrysu` dodaje punkt maski/obrysu bez punktu kalibracyjnego.
    - po kliknięciu współrzędne są automatycznie podpowiadane na podstawie bieżącej kalibracji,
+   - jeśli klik jest blisko linii siatki wynikającej ze skali arkusza, proponowana pozycja punktu kalibracyjnego jest automatycznie dociągana do tej siatki,
    - możesz je ręcznie edytować.
    - podczas nanoszenia/przesuwania punktu kalibracyjnego widoczne są linie pozycji kursora.
+   - `Esc` kończy tryb dodawania punktu kalibracyjnego lub obrysu.
+   - każde dodanie punktu kalibracyjnego dopisuje przypadek diagnostyczny do `./geo_position_cases.jsonl`.
 5. Punkty można przesuwać przeciągając myszą.
 6. W panelu bocznym:
    - drzewo projektu: `Skan -> Arkusze -> (Obrys kadrowania / Punkty kalibracyjne)`,
    - kliknięcie elementu drzewa zaznacza odpowiedni arkusz/punkt na mapie,
-   - `Usuń zaznaczony punkt` usuwa aktualny punkt kalibracyjny lub punkt obrysu,
-   - przycisk `Dodaj punkt kalibracji do obrysu` pozwala użyć punktu kalibracyjnego jako punktu kadrowania,
+   - menu kontekstowe drzewa (prawy przycisk myszy) pozwala zależnie od węzła dodać/usunąć arkusz oraz dodać/usunąć punkty obrysu lub kalibracyjne,
+   - `Arkusz -> Dodaj punkt kalibracji do obrysu` pozwala użyć punktu kalibracyjnego jako punktu kadrowania,
    - edytuj nazwę i skalę zaznaczonego arkusza,
    - dla zaznaczonego punktu wpisz `Lat` i `Lon`, a potem kliknij `Zapisz punkt` (z walidacją formatu).
 7. Pasek statusu pokazuje pozycję kursora w pikselach i przybliżoną pozycję geo.
 8. Pan i zoom:
    - rolka myszy: zoom względem kursora,
    - środkowy przycisk myszy + przeciąganie: pan,
-   - przyciski `Zoom +`, `Zoom -`, `Zoom 100%` w panelu bocznym.
+   - `Widok -> Zoom +`, `Widok -> Zoom -`, `Widok -> Zoom 100%`.
 
 ## Uwagi
 - Pozycja geo kursora i siatka są liczone:
@@ -45,11 +50,11 @@ python3 main.py
   - z 3+ punktów: dopasowanie afiniczne (least squares).
 - Linie obrysu mają stałą grubość ekranową (nie skalują się przy zoom).
 - `Plik -> Zapisz` / `Zapisz jako...` / `Wczytaj album` operuje na całym albumie (zbiorze skanów).
-- `Plik -> Eksportuj KAP...` eksportuje arkusze z bieżącego skanu do wskazanego katalogu.
+- `Arkusz -> Eksportuj KAP...` eksportuje arkusze z bieżącego skanu do wskazanego katalogu.
   - każdy arkusz musi mieć skalę (np. `1:50000`),
   - punkty obrysu muszą mieć współrzędne geo (brakujące są wyliczane z bieżącej kalibracji, jeśli to możliwe).
-- `Ustawienia -> Edytuj ustawienia...` pozwala zmienić parametry wyświetlania i język oraz zapisać je do `.pymapcal`.
-- Ścieżka do binarki `imgkap` jest konfigurowalna w `Ustawienia -> Edytuj ustawienia...`.
+- `Narzędzia -> Edytuj ustawienia...` pozwala zmienić parametry wyświetlania i język oraz zapisać je do `.pymapcal`.
+- Ścieżka do binarki `imgkap` jest konfigurowalna w `Narzędzia -> Edytuj ustawienia...`.
 - `Plik -> Zapisz` zapisuje do aktualnie otwartego projektu (bez pytania),
 - `Plik -> Zapisz jako...` zapisuje pod nową nazwą/ścieżką.
 

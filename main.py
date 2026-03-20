@@ -5,6 +5,7 @@ import math
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QMenu,
     QProgressDialog,
     QPushButton,
     QScrollArea,
@@ -42,6 +44,13 @@ from kap_export import (
     run_kap_export_jobs,
     sanitize_kap_stem,
 )
+from geo_positioning import (
+    CalibrationSnapResult,
+    build_geo_transform,
+    geo_position_from_image_xy,
+    point_in_polygon,
+    snap_calibration_position,
+)
 
 TRANSLATIONS = {
     "pl": {
@@ -54,11 +63,9 @@ TRANSLATIONS = {
         "limit_title": "Limit",
         "limit_cal_points": "Maksymalnie 9 punktów kalibracyjnych na arkusz.",
         "btn_new_sheet": "Nowy arkusz",
-        "btn_close_sheet": "Zamknij arkusz",
         "btn_cancel_drawing": "Anuluj rysowanie",
         "btn_add_cal_point": "Dodaj punkt kalibracyjny",
         "btn_add_outline_point": "Dodaj punkt obrysu",
-        "btn_select_mode": "Tryb wyboru",
         "btn_delete_sheet": "Usuń zaznaczony arkusz",
         "btn_delete_point": "Usuń zaznaczony punkt",
         "btn_use_as_corner": "Dodaj punkt kalibracji do obrysu",
@@ -74,6 +81,9 @@ TRANSLATIONS = {
         "field_lon": "Lon",
         "panel_point_geo": "Punkt (lat/lon)",
         "menu_file": "Plik",
+        "menu_sheet": "Arkusz",
+        "menu_tools": "Narzędzia",
+        "menu_view": "Widok",
         "menu_open_scan": "Dodaj skan mapy",
         "menu_save": "Zapisz",
         "menu_save_as": "Zapisz jako...",
@@ -188,11 +198,9 @@ TRANSLATIONS = {
         "limit_title": "Limit",
         "limit_cal_points": "Maximum 9 calibration points per sheet.",
         "btn_new_sheet": "New sheet",
-        "btn_close_sheet": "Close sheet",
         "btn_cancel_drawing": "Cancel drawing",
         "btn_add_cal_point": "Add calibration point",
         "btn_add_outline_point": "Add outline point",
-        "btn_select_mode": "Select mode",
         "btn_delete_sheet": "Delete selected sheet",
         "btn_delete_point": "Delete selected point",
         "btn_use_as_corner": "Use calibration point in crop outline",
@@ -208,6 +216,9 @@ TRANSLATIONS = {
         "field_lon": "Lon",
         "panel_point_geo": "Point (lat/lon)",
         "menu_file": "File",
+        "menu_sheet": "Sheet",
+        "menu_tools": "Tools",
+        "menu_view": "View",
         "menu_open_scan": "Add map scan",
         "menu_save": "Save",
         "menu_save_as": "Save as...",
@@ -360,7 +371,6 @@ class Sheet:
     name: str
     scale: str = ""
     points: list[CalibrationPoint] = field(default_factory=list)
-
     def corners(self) -> list[CalibrationPoint]:
         return [p for p in self.points if p.is_corner]
 
@@ -517,179 +527,6 @@ def load_display_settings() -> tuple[DisplaySettings, str, Optional[Path], str, 
         except Exception as exc:
             return DisplaySettings(), "pl", path, "imgkap", "UNKNOWN", "", t("pl", "settings_load_error", error=exc)
     return DisplaySettings(), "pl", None, "imgkap", "UNKNOWN", "", None
-
-
-def point_in_polygon(x: float, y: float, polygon: list[CalibrationPoint]) -> bool:
-    if len(polygon) < 3:
-        return False
-    inside = False
-    j = len(polygon) - 1
-    for i in range(len(polygon)):
-        xi, yi = polygon[i].x, polygon[i].y
-        xj, yj = polygon[j].x, polygon[j].y
-        intersects = ((yi > y) != (yj > y)) and (
-            x < (xj - xi) * (y - yi) / ((yj - yi) + 1e-12) + xi
-        )
-        if intersects:
-            inside = not inside
-        j = i
-    return inside
-
-
-def solve_3x3(a: list[list[float]], b: list[float]) -> Optional[list[float]]:
-    m = [row[:] + [rhs] for row, rhs in zip(a, b)]
-    n = 3
-    for col in range(n):
-        pivot = max(range(col, n), key=lambda r: abs(m[r][col]))
-        if abs(m[pivot][col]) < 1e-12:
-            return None
-        if pivot != col:
-            m[col], m[pivot] = m[pivot], m[col]
-        f = m[col][col]
-        for k in range(col, n + 1):
-            m[col][k] /= f
-        for r in range(n):
-            if r == col:
-                continue
-            factor = m[r][col]
-            for k in range(col, n + 1):
-                m[r][k] -= factor * m[col][k]
-    return [m[i][n] for i in range(n)]
-
-
-def affine_from_points(points: list[CalibrationPoint]) -> Optional[tuple[list[float], list[float]]]:
-    known = [p for p in points if p.lon is not None and p.lat is not None]
-    if len(known) < 3:
-        return None
-    samples = [(p.x, p.y, float(p.lon), float(p.lat)) for p in known]
-    return affine_fit(samples)
-
-
-def affine_fit(samples: list[tuple[float, float, float, float]]) -> Optional[tuple[list[float], list[float]]]:
-    if len(samples) < 3:
-        return None
-
-    s_xx = s_xy = s_x = s_yy = s_y = n = 0.0
-    b_dst_x = [0.0, 0.0, 0.0]
-    b_dst_y = [0.0, 0.0, 0.0]
-
-    for x, y, dst_x, dst_y in samples:
-        n += 1.0
-        s_xx += x * x
-        s_xy += x * y
-        s_x += x
-        s_yy += y * y
-        s_y += y
-        b_dst_x[0] += x * dst_x
-        b_dst_x[1] += y * dst_x
-        b_dst_x[2] += dst_x
-        b_dst_y[0] += x * dst_y
-        b_dst_y[1] += y * dst_y
-        b_dst_y[2] += dst_y
-
-    ata = [
-        [s_xx, s_xy, s_x],
-        [s_xy, s_yy, s_y],
-        [s_x, s_y, n],
-    ]
-    dst_x_coef = solve_3x3(ata, b_dst_x)
-    dst_y_coef = solve_3x3(ata, b_dst_y)
-    if not dst_x_coef or not dst_y_coef:
-        return None
-    return dst_x_coef, dst_y_coef
-
-
-def apply_affine(coef_x: list[float], coef_y: list[float], x: float, y: float) -> tuple[float, float]:
-    out_x = coef_x[0] * x + coef_x[1] * y + coef_x[2]
-    out_y = coef_y[0] * x + coef_y[1] * y + coef_y[2]
-    return out_x, out_y
-
-
-def apply_similarity(
-    src_a: tuple[float, float],
-    src_b: tuple[float, float],
-    dst_a: tuple[float, float],
-    dst_b: tuple[float, float],
-    x: float,
-    y: float,
-) -> Optional[tuple[float, float]]:
-    src_dx = src_b[0] - src_a[0]
-    src_dy = src_b[1] - src_a[1]
-    dst_dx = dst_b[0] - dst_a[0]
-    dst_dy = dst_b[1] - dst_a[1]
-    src_len = math.hypot(src_dx, src_dy)
-    dst_len = math.hypot(dst_dx, dst_dy)
-    if src_len < 1e-9 or dst_len < 1e-9:
-        return None
-
-    src_ex = src_dx / src_len
-    src_ey = src_dy / src_len
-    dst_ex = dst_dx / dst_len
-    dst_ey = dst_dy / dst_len
-    src_perp_x, src_perp_y = -src_ey, src_ex
-    dst_perp_x, dst_perp_y = -dst_ey, dst_ex
-
-    rel_x = x - src_a[0]
-    rel_y = y - src_a[1]
-    u = rel_x * src_ex + rel_y * src_ey
-    v = rel_x * src_perp_x + rel_y * src_perp_y
-    scale = dst_len / src_len
-
-    out_x = dst_a[0] + scale * (u * dst_ex + v * dst_perp_x)
-    out_y = dst_a[1] + scale * (u * dst_ey + v * dst_perp_y)
-    return out_x, out_y
-
-
-class GeoTransform:
-    def __init__(
-        self,
-        mode: str,
-        affine_forward: Optional[tuple[list[float], list[float]]] = None,
-        affine_reverse: Optional[tuple[list[float], list[float]]] = None,
-        sim_pixels: Optional[tuple[tuple[float, float], tuple[float, float]]] = None,
-        sim_geo: Optional[tuple[tuple[float, float], tuple[float, float]]] = None,
-    ) -> None:
-        self.mode = mode
-        self.affine_forward = affine_forward
-        self.affine_reverse = affine_reverse
-        self.sim_pixels = sim_pixels
-        self.sim_geo = sim_geo
-
-    def pixel_to_geo(self, x: float, y: float) -> Optional[tuple[float, float]]:
-        if self.mode == "affine" and self.affine_forward is not None:
-            lon_coef, lat_coef = self.affine_forward
-            return apply_affine(lon_coef, lat_coef, x, y)
-        if self.mode == "similarity" and self.sim_pixels and self.sim_geo:
-            return apply_similarity(self.sim_pixels[0], self.sim_pixels[1], self.sim_geo[0], self.sim_geo[1], x, y)
-        return None
-
-    def geo_to_pixel(self, lon: float, lat: float) -> Optional[tuple[float, float]]:
-        if self.mode == "affine" and self.affine_reverse is not None:
-            x_coef, y_coef = self.affine_reverse
-            return apply_affine(x_coef, y_coef, lon, lat)
-        if self.mode == "similarity" and self.sim_pixels and self.sim_geo:
-            return apply_similarity(self.sim_geo[0], self.sim_geo[1], self.sim_pixels[0], self.sim_pixels[1], lon, lat)
-        return None
-
-
-def build_geo_transform(points: list[CalibrationPoint]) -> Optional[GeoTransform]:
-    known = [p for p in points if p.lon is not None and p.lat is not None]
-    if len(known) >= 3:
-        forward = affine_fit([(p.x, p.y, float(p.lon), float(p.lat)) for p in known])
-        reverse = affine_fit([(float(p.lon), float(p.lat), p.x, p.y) for p in known])
-        if forward and reverse:
-            return GeoTransform("affine", affine_forward=forward, affine_reverse=reverse)
-
-    if len(known) >= 2:
-        p1, p2 = known[0], known[1]
-        sim_pixels = ((p1.x, p1.y), (p2.x, p2.y))
-        sim_geo = ((float(p1.lon), float(p1.lat)), (float(p2.lon), float(p2.lat)))
-        if (
-            math.hypot(sim_pixels[1][0] - sim_pixels[0][0], sim_pixels[1][1] - sim_pixels[0][1]) > 1e-9
-            and math.hypot(sim_geo[1][0] - sim_geo[0][0], sim_geo[1][1] - sim_geo[0][1]) > 1e-9
-        ):
-            return GeoTransform("similarity", sim_pixels=sim_pixels, sim_geo=sim_geo)
-    return None
 
 
 def format_dmm(value: float, kind: str) -> str:
@@ -892,11 +729,11 @@ def parse_scale_value(value: str) -> Optional[int]:
         return None
     return out
 
-
 class MapCanvas(QWidget):
     cursorMoved = Signal(float, float, object)
     selectionChanged = Signal(object, object)
     sheetsChanged = Signal()
+    calibrationPointAdded = Signal(object)
     panBy = Signal(float, float)
     zoomRequest = Signal(float, object)
 
@@ -915,7 +752,6 @@ class MapCanvas(QWidget):
         self.selected_sheet_idx: Optional[int] = None
         self.selected_point_idx: Optional[int] = None
         self.mode = self.MODE_SELECT
-        self.new_sheet_temp_points: list[CalibrationPoint] = []
         self.dragging = False
         self.zoom_factor = 1.0
         self.is_panning = False
@@ -988,49 +824,46 @@ class MapCanvas(QWidget):
         self.sheets = []
         self.selected_sheet_idx = None
         self.selected_point_idx = None
-        self.new_sheet_temp_points = []
         self.mode = self.MODE_SELECT
         self.selectionChanged.emit(self.selected_sheet_idx, self.selected_point_idx)
         self.sheetsChanged.emit()
         self.update()
 
     def start_new_sheet(self) -> None:
-        self.mode = self.MODE_NEW_SHEET
-        self.new_sheet_temp_points = []
-        self.selected_point_idx = None
-        self.update()
-
-    def close_new_sheet(self) -> bool:
-        if self.mode != self.MODE_NEW_SHEET:
-            return False
-        if len(self.new_sheet_temp_points) < 3:
-            return False
         sheet = Sheet(name=f"{t(self.lang, 'sheet_default')} {len(self.sheets) + 1}")
-        for p in self.new_sheet_temp_points:
-            sheet.points.append(CalibrationPoint(p.x, p.y, is_corner=True))
         self.sheets.append(sheet)
         self.selected_sheet_idx = len(self.sheets) - 1
         self.selected_point_idx = None
-        self.new_sheet_temp_points = []
+        self.mode = self.MODE_NEW_SHEET
+        self.selectionChanged.emit(self.selected_sheet_idx, self.selected_point_idx)
+        self.sheetsChanged.emit()
+        self.update()
+
+    def cancel_new_sheet(self) -> None:
+        if self.mode == self.MODE_NEW_SHEET and self.selected_sheet_idx is not None:
+            del self.sheets[self.selected_sheet_idx]
+            if self.sheets:
+                self.selected_sheet_idx = max(0, self.selected_sheet_idx - 1)
+            else:
+                self.selected_sheet_idx = None
+            self.selected_point_idx = None
         self.mode = self.MODE_SELECT
         self.selectionChanged.emit(self.selected_sheet_idx, self.selected_point_idx)
         self.sheetsChanged.emit()
         self.update()
-        return True
-
-    def cancel_new_sheet(self) -> None:
-        self.new_sheet_temp_points = []
-        self.mode = self.MODE_SELECT
-        self.update()
-
-    def set_mode_select(self) -> None:
-        self.mode = self.MODE_SELECT
 
     def set_mode_add_cal_point(self) -> None:
         self.mode = self.MODE_ADD_CAL_POINT
 
     def set_mode_add_outline_point(self) -> None:
         self.mode = self.MODE_ADD_OUTLINE_POINT
+
+    def cancel_active_add_mode(self) -> bool:
+        if self.mode not in (self.MODE_ADD_CAL_POINT, self.MODE_ADD_OUTLINE_POINT):
+            return False
+        self.mode = self.MODE_SELECT
+        self.update()
+        return True
 
     def nearest_point(self, x: float, y: float, radius: float = 8.0) -> tuple[Optional[int], Optional[int]]:
         best = (None, None)
@@ -1056,10 +889,34 @@ class MapCanvas(QWidget):
             if idx is None:
                 return None
             sheet = self.sheets[idx]
-        transform = build_geo_transform(sheet.points)
-        if transform is None:
-            return None
-        return transform.pixel_to_geo(x, y)
+        return geo_position_from_image_xy(sheet.points, x, y).geo
+
+    def snapped_calibration_position(
+        self,
+        x: float,
+        y: float,
+    ) -> CalibrationSnapResult:
+        sheet = self.selected_sheet
+        if sheet is None:
+            return CalibrationSnapResult(
+                raw_x=x,
+                raw_y=y,
+                final_x=x,
+                final_y=y,
+                raw_geo=None,
+                final_geo=None,
+                inside_outline=False,
+                used_mercator=False,
+                did_snap=False,
+                step_minutes=None,
+                threshold_image_px=0.0,
+            )
+        return snap_calibration_position(
+            points=sheet.points,
+            scale_value=parse_scale_value(sheet.scale),
+            x=x,
+            y=y,
+        )
 
     def draw_geo_grid(self, p: QPainter) -> None:
         if self.pixmap.isNull() or not self.show_geo_grid:
@@ -1167,7 +1024,10 @@ class MapCanvas(QWidget):
             return
         x, y = self.to_image_coords(e.position())
         if self.mode == self.MODE_NEW_SHEET:
-            self.new_sheet_temp_points.append(CalibrationPoint(x=x, y=y, is_corner=True))
+            if self.selected_sheet is None:
+                return
+            self.selected_sheet.points.append(CalibrationPoint(x=x, y=y, is_corner=True))
+            self.sheetsChanged.emit()
             self.update()
             return
 
@@ -1201,10 +1061,10 @@ class MapCanvas(QWidget):
                         msg.setWindowFlag(Qt.WindowStaysOnTopHint, True)
                     msg.exec()
                     return
-                pred = self.geo_for_cursor(x, y)
-                new_point = CalibrationPoint(x=x, y=y, is_corner=False)
-                if pred is not None:
-                    lon, lat = pred
+                snap_result = self.snapped_calibration_position(x, y)
+                new_point = CalibrationPoint(x=snap_result.final_x, y=snap_result.final_y, is_corner=False)
+                if snap_result.final_geo is not None:
+                    lon, lat = snap_result.final_geo
                     new_point.lon = lon
                     new_point.lat = lat
                     new_point.lon_text = format_dmm(lon, "lon")
@@ -1213,6 +1073,7 @@ class MapCanvas(QWidget):
                 self.selected_point_idx = len(self.selected_sheet.points) - 1
                 self.selectionChanged.emit(self.selected_sheet_idx, self.selected_point_idx)
                 self.sheetsChanged.emit()
+                self.calibrationPointAdded.emit(snap_result)
                 self.update()
             return
 
@@ -1274,7 +1135,8 @@ class MapCanvas(QWidget):
                 )
                 pen.setCosmetic(True)
                 p.setPen(pen)
-                for i in range(len(corners)):
+                segment_count = len(corners) if len(corners) >= 3 else len(corners) - 1
+                for i in range(max(0, segment_count)):
                     a = corners[i]
                     b = corners[(i + 1) % len(corners)]
                     p.drawLine(int(a.x), int(a.y), int(b.x), int(b.y))
@@ -1291,16 +1153,6 @@ class MapCanvas(QWidget):
                     color = QColor("#ff4d6d")
                 marker_items.append((pt.x, pt.y, color, is_corner, is_selected_point))
 
-        if self.mode == self.MODE_NEW_SHEET and self.new_sheet_temp_points:
-            draft_pen = QPen(QColor("#f94144"), self.display.draft_outline_width, Qt.DashLine)
-            draft_pen.setCosmetic(True)
-            p.setPen(draft_pen)
-            for i in range(1, len(self.new_sheet_temp_points)):
-                a = self.new_sheet_temp_points[i - 1]
-                b = self.new_sheet_temp_points[i]
-                p.drawLine(int(a.x), int(a.y), int(b.x), int(b.y))
-            for pt in self.new_sheet_temp_points:
-                marker_items.append((pt.x, pt.y, QColor("#f94144"), True, False))
         p.restore()
 
         if self.should_draw_cursor_guides() and self.cursor_x is not None and self.cursor_y is not None:
@@ -1410,6 +1262,7 @@ class MainWindow(QMainWindow):
         self.canvas.cursorMoved.connect(self.on_cursor_moved)
         self.canvas.selectionChanged.connect(self.on_canvas_selection_changed)
         self.canvas.sheetsChanged.connect(self.refresh_sheet_list)
+        self.canvas.calibrationPointAdded.connect(self.on_calibration_point_added)
         self.canvas.panBy.connect(self.on_canvas_pan_by)
         self.canvas.zoomRequest.connect(self.on_canvas_zoom_request)
         self.canvas_scroll = QScrollArea()
@@ -1659,7 +1512,6 @@ class MainWindow(QMainWindow):
         self.canvas.sheets = scan.sheets
         self.canvas.selected_sheet_idx = 0 if self.canvas.sheets else None
         self.canvas.selected_point_idx = None
-        self.canvas.new_sheet_temp_points = []
         self.canvas.mode = self.canvas.MODE_SELECT
         self.canvas.dragging = False
         self.canvas.update()
@@ -1693,50 +1545,13 @@ class MainWindow(QMainWindow):
         panel.setFrameShape(QFrame.StyledPanel)
         layout = QVBoxLayout(panel)
 
-        self.btn_new_sheet = QPushButton(self.tr("btn_new_sheet"))
-        self.btn_close_sheet = QPushButton(self.tr("btn_close_sheet"))
-        self.btn_cancel_sheet = QPushButton(self.tr("btn_cancel_drawing"))
-        self.btn_add_cal = QPushButton(self.tr("btn_add_cal_point"))
-        self.btn_add_outline = QPushButton(self.tr("btn_add_outline_point"))
-        self.btn_select_mode = QPushButton(self.tr("btn_select_mode"))
-        self.btn_delete_sheet = QPushButton(self.tr("btn_delete_sheet"))
-        self.btn_delete_point = QPushButton(self.tr("btn_delete_point"))
-        self.btn_use_as_corner = QPushButton(self.tr("btn_use_as_corner"))
-        self.btn_zoom_in = QPushButton(self.tr("btn_zoom_in"))
-        self.btn_zoom_out = QPushButton(self.tr("btn_zoom_out"))
-        self.btn_zoom_reset = QPushButton(self.tr("btn_zoom_reset"))
-
-        self.btn_new_sheet.clicked.connect(self.canvas.start_new_sheet)
-        self.btn_close_sheet.clicked.connect(self.close_sheet_clicked)
-        self.btn_cancel_sheet.clicked.connect(self.canvas.cancel_new_sheet)
-        self.btn_add_cal.clicked.connect(self.canvas.set_mode_add_cal_point)
-        self.btn_add_outline.clicked.connect(self.canvas.set_mode_add_outline_point)
-        self.btn_select_mode.clicked.connect(self.canvas.set_mode_select)
-        self.btn_delete_sheet.clicked.connect(self.delete_sheet)
-        self.btn_delete_point.clicked.connect(self.delete_selected_point)
-        self.btn_use_as_corner.clicked.connect(self.use_selected_point_as_corner)
-        self.btn_zoom_in.clicked.connect(self.zoom_in)
-        self.btn_zoom_out.clicked.connect(self.zoom_out)
-        self.btn_zoom_reset.clicked.connect(self.zoom_reset)
-
-        layout.addWidget(self.btn_new_sheet)
-        layout.addWidget(self.btn_close_sheet)
-        layout.addWidget(self.btn_cancel_sheet)
-        layout.addWidget(self.btn_add_cal)
-        layout.addWidget(self.btn_add_outline)
-        layout.addWidget(self.btn_select_mode)
-        layout.addWidget(self.btn_delete_sheet)
-        layout.addWidget(self.btn_delete_point)
-        layout.addWidget(self.btn_use_as_corner)
-        layout.addWidget(self.btn_zoom_in)
-        layout.addWidget(self.btn_zoom_out)
-        layout.addWidget(self.btn_zoom_reset)
-
         self.lbl_sheets = QLabel(self.tr("panel_sheets"))
         layout.addWidget(self.lbl_sheets)
         self.sheet_tree = QTreeWidget()
         self.sheet_tree.setHeaderHidden(True)
         self.sheet_tree.currentItemChanged.connect(self.on_tree_selection_changed)
+        self.sheet_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.sheet_tree.customContextMenuRequested.connect(self.on_sheet_tree_context_menu)
         layout.addWidget(self.sheet_tree)
 
         self.lbl_meta_title = QLabel(self.tr("panel_sheet_meta"))
@@ -1765,63 +1580,128 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return panel
 
+    def start_new_sheet(self) -> None:
+        if self.current_scan is None:
+            return
+        if not self.confirm_leave_point_editor(None):
+            return
+        self.canvas.start_new_sheet()
+        self.refresh_action_states()
+
+    def cancel_sheet_drawing(self) -> None:
+        self.canvas.cancel_new_sheet()
+        self.refresh_action_states()
+
+    def set_mode_add_cal_point(self) -> None:
+        if self.current_scan is None or self.canvas.selected_sheet is None:
+            return
+        self.canvas.set_mode_add_cal_point()
+        self.refresh_action_states()
+
+    def set_mode_add_outline_point(self) -> None:
+        if self.current_scan is None or self.canvas.selected_sheet is None:
+            return
+        self.canvas.set_mode_add_outline_point()
+        self.refresh_action_states()
+
     def build_menu(self) -> None:
-        self.menu_file = self.menuBar().addMenu(self.tr("menu_file"))
         self.action_open_img = QAction(self.tr("menu_open_scan"), self)
         self.action_open_img.triggered.connect(self.open_image)
-        self.menu_file.addAction(self.action_open_img)
 
         self.action_import_map = QAction(self.tr("menu_import_map"), self)
         self.action_import_map.triggered.connect(self.import_map_files)
-        self.menu_file.addAction(self.action_import_map)
-
-        self.action_export_kap = QAction(self.tr("menu_export_kap"), self)
-        self.action_export_kap.triggered.connect(self.export_kap_current_scan)
-        self.menu_file.addAction(self.action_export_kap)
-
-        self.action_export_all_kap = QAction(self.tr("menu_export_all_kap"), self)
-        self.action_export_all_kap.triggered.connect(self.export_kap_all_scans)
-        self.menu_file.addAction(self.action_export_all_kap)
 
         self.action_save_proj = QAction(self.tr("menu_save"), self)
         self.action_save_proj.triggered.connect(self.save_project)
-        self.menu_file.addAction(self.action_save_proj)
 
         self.action_save_as_proj = QAction(self.tr("menu_save_as"), self)
         self.action_save_as_proj.triggered.connect(self.save_project_as)
-        self.menu_file.addAction(self.action_save_as_proj)
 
         self.action_load_proj = QAction(self.tr("menu_load_project"), self)
         self.action_load_proj.triggered.connect(self.load_project)
-        self.menu_file.addAction(self.action_load_proj)
 
-        self.menu_settings = self.menuBar().addMenu(self.tr("menu_settings"))
+        self.action_export_kap = QAction(self.tr("menu_export_kap"), self)
+        self.action_export_kap.triggered.connect(self.export_kap_current_scan)
+
+        self.action_export_all_kap = QAction(self.tr("menu_export_all_kap"), self)
+        self.action_export_all_kap.triggered.connect(self.export_kap_all_scans)
+
+        self.action_new_sheet = QAction(self.tr("btn_new_sheet"), self)
+        self.action_new_sheet.triggered.connect(self.start_new_sheet)
+
+        self.action_cancel_sheet = QAction(self.tr("btn_cancel_drawing"), self)
+        self.action_cancel_sheet.triggered.connect(self.cancel_sheet_drawing)
+
+        self.action_add_cal = QAction(self.tr("btn_add_cal_point"), self)
+        self.action_add_cal.triggered.connect(self.set_mode_add_cal_point)
+
+        self.action_add_outline = QAction(self.tr("btn_add_outline_point"), self)
+        self.action_add_outline.triggered.connect(self.set_mode_add_outline_point)
+
+        self.action_delete_sheet = QAction(self.tr("btn_delete_sheet"), self)
+        self.action_delete_sheet.triggered.connect(self.delete_sheet)
+
+        self.action_delete_point = QAction(self.tr("btn_delete_point"), self)
+        self.action_delete_point.triggered.connect(self.delete_selected_point)
+
+        self.action_use_as_corner = QAction(self.tr("btn_use_as_corner"), self)
+        self.action_use_as_corner.triggered.connect(self.use_selected_point_as_corner)
+
+        self.action_zoom_in = QAction(self.tr("btn_zoom_in"), self)
+        self.action_zoom_in.triggered.connect(self.zoom_in)
+
+        self.action_zoom_out = QAction(self.tr("btn_zoom_out"), self)
+        self.action_zoom_out.triggered.connect(self.zoom_out)
+
+        self.action_zoom_reset = QAction(self.tr("btn_zoom_reset"), self)
+        self.action_zoom_reset.triggered.connect(self.zoom_reset)
+
         self.action_edit_settings = QAction(self.tr("menu_edit_settings"), self)
         self.action_edit_settings.triggered.connect(self.edit_settings)
-        self.menu_settings.addAction(self.action_edit_settings)
 
-        self.menu_help = self.menuBar().addMenu(self.tr("menu_help"))
         self.action_show_readme = QAction(self.tr("menu_readme"), self)
         self.action_show_readme.triggered.connect(self.show_readme_help)
+
+        self.menu_file = self.menuBar().addMenu(self.tr("menu_file"))
+        self.menu_file.addAction(self.action_open_img)
+        self.menu_file.addAction(self.action_import_map)
+        self.menu_file.addAction(self.action_load_proj)
+        self.menu_file.addSeparator()
+        self.menu_file.addAction(self.action_save_proj)
+        self.menu_file.addAction(self.action_save_as_proj)
+        self.menu_file.addSeparator()
+        self.menu_file.addAction(self.action_export_all_kap)
+
+        self.menu_sheet = self.menuBar().addMenu(self.tr("menu_sheet"))
+        self.menu_sheet.addAction(self.action_new_sheet)
+        self.menu_sheet.addAction(self.action_cancel_sheet)
+        self.menu_sheet.addSeparator()
+        self.menu_sheet.addAction(self.action_add_cal)
+        self.menu_sheet.addAction(self.action_add_outline)
+        self.menu_sheet.addSeparator()
+        self.menu_sheet.addAction(self.action_delete_sheet)
+        self.menu_sheet.addAction(self.action_delete_point)
+        self.menu_sheet.addAction(self.action_use_as_corner)
+        self.menu_sheet.addSeparator()
+        self.menu_sheet.addAction(self.action_export_kap)
+
+        self.menu_tools = self.menuBar().addMenu(self.tr("menu_tools"))
+        self.menu_tools.addAction(self.action_edit_settings)
+
+        self.menu_view = self.menuBar().addMenu(self.tr("menu_view"))
+        self.menu_view.addAction(self.action_zoom_in)
+        self.menu_view.addAction(self.action_zoom_out)
+        self.menu_view.addAction(self.action_zoom_reset)
+
+        self.menu_help = self.menuBar().addMenu(self.tr("menu_help"))
         self.menu_help.addAction(self.action_show_readme)
+        self.refresh_action_states()
 
     def apply_language_to_ui(self) -> None:
         self.base_title = t(self.lang, "title")
         self.update_window_title()
         self.canvas.set_language(self.lang)
 
-        self.btn_new_sheet.setText(self.tr("btn_new_sheet"))
-        self.btn_close_sheet.setText(self.tr("btn_close_sheet"))
-        self.btn_cancel_sheet.setText(self.tr("btn_cancel_drawing"))
-        self.btn_add_cal.setText(self.tr("btn_add_cal_point"))
-        self.btn_add_outline.setText(self.tr("btn_add_outline_point"))
-        self.btn_select_mode.setText(self.tr("btn_select_mode"))
-        self.btn_delete_sheet.setText(self.tr("btn_delete_sheet"))
-        self.btn_delete_point.setText(self.tr("btn_delete_point"))
-        self.btn_use_as_corner.setText(self.tr("btn_use_as_corner"))
-        self.btn_zoom_in.setText(self.tr("btn_zoom_in"))
-        self.btn_zoom_out.setText(self.tr("btn_zoom_out"))
-        self.btn_zoom_reset.setText(self.tr("btn_zoom_reset"))
         self.btn_save_point.setText(self.tr("btn_save_point"))
 
         self.lbl_sheets.setText(self.tr("panel_sheets"))
@@ -1842,14 +1722,26 @@ class MainWindow(QMainWindow):
             lon_label.setText(self.tr("field_lon"))
 
         self.menu_file.setTitle(self.tr("menu_file"))
+        self.menu_sheet.setTitle(self.tr("menu_sheet"))
+        self.menu_tools.setTitle(self.tr("menu_tools"))
+        self.menu_view.setTitle(self.tr("menu_view"))
         self.action_open_img.setText(self.tr("menu_open_scan"))
         self.action_import_map.setText(self.tr("menu_import_map"))
-        self.action_export_kap.setText(self.tr("menu_export_kap"))
-        self.action_export_all_kap.setText(self.tr("menu_export_all_kap"))
         self.action_save_proj.setText(self.tr("menu_save"))
         self.action_save_as_proj.setText(self.tr("menu_save_as"))
         self.action_load_proj.setText(self.tr("menu_load_project"))
-        self.menu_settings.setTitle(self.tr("menu_settings"))
+        self.action_export_kap.setText(self.tr("menu_export_kap"))
+        self.action_export_all_kap.setText(self.tr("menu_export_all_kap"))
+        self.action_new_sheet.setText(self.tr("btn_new_sheet"))
+        self.action_cancel_sheet.setText(self.tr("btn_cancel_drawing"))
+        self.action_add_cal.setText(self.tr("btn_add_cal_point"))
+        self.action_add_outline.setText(self.tr("btn_add_outline_point"))
+        self.action_delete_sheet.setText(self.tr("btn_delete_sheet"))
+        self.action_delete_point.setText(self.tr("btn_delete_point"))
+        self.action_use_as_corner.setText(self.tr("btn_use_as_corner"))
+        self.action_zoom_in.setText(self.tr("btn_zoom_in"))
+        self.action_zoom_out.setText(self.tr("btn_zoom_out"))
+        self.action_zoom_reset.setText(self.tr("btn_zoom_reset"))
         self.action_edit_settings.setText(self.tr("menu_edit_settings"))
         self.menu_help.setTitle(self.tr("menu_help"))
         self.action_show_readme.setText(self.tr("menu_readme"))
@@ -1874,6 +1766,7 @@ class MainWindow(QMainWindow):
             self.on_cursor_moved(self.canvas.cursor_x, self.canvas.cursor_y, geo)
         else:
             self.statusBar().showMessage(self.tr("ready"))
+        self.refresh_action_states()
 
     @staticmethod
     def _settings_path_for_write(existing_path: Optional[Path]) -> Path:
@@ -2042,6 +1935,36 @@ class MainWindow(QMainWindow):
             msg = self.tr("status_cursor_geo", x=x, y=y, lon=lon, lat=lat, zoom=zoom_pct)
         self.statusBar().showMessage(msg)
 
+    def on_calibration_point_added(self, snap_result: object) -> None:
+        if not isinstance(snap_result, CalibrationSnapResult):
+            return
+        scan = self.current_scan
+        sheet = self.canvas.selected_sheet
+        point = self.canvas.selected_point
+        if scan is None or sheet is None or point is None:
+            return
+
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event": "add_calibration_point",
+            "scan_name": scan.name,
+            "scan_image_path": scan.image_path,
+            "project_path": None if self.project_path is None else str(self.project_path),
+            "sheet_name": sheet.name,
+            "sheet_scale": sheet.scale,
+            "selected_sheet_idx": self.canvas.selected_sheet_idx,
+            "selected_point_idx": self.canvas.selected_point_idx,
+            "sheet_points": [p.to_json() for p in sheet.points],
+            "snap_result": snap_result.to_dict(),
+            "saved_point": point.to_json(),
+        }
+        log_path = Path.cwd() / "geo_position_cases.jsonl"
+        try:
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(payload, ensure_ascii=True) + "\n")
+        except OSError:
+            pass
+
     def on_canvas_pan_by(self, dx: float, dy: float) -> None:
         hbar = self.canvas_scroll.horizontalScrollBar()
         vbar = self.canvas_scroll.verticalScrollBar()
@@ -2105,9 +2028,74 @@ class MainWindow(QMainWindow):
         target_zoom = min(vw / iw, vh / ih)
         self.apply_zoom(target_zoom)
 
-    def close_sheet_clicked(self) -> None:
-        if not self.canvas.close_new_sheet():
-            self.show_warning(self.tr("error_title"), self.tr("error_sheet_min_points"))
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key_Escape and self.canvas.cancel_active_add_mode():
+            self.refresh_action_states()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def refresh_action_states(self) -> None:
+        has_scan = self.current_scan is not None
+        has_sheet = self.canvas.selected_sheet is not None
+        has_point = self.canvas.selected_point is not None
+        point_is_corner = bool(self.canvas.selected_point.is_corner) if self.canvas.selected_point is not None else False
+
+        self.action_new_sheet.setEnabled(has_scan)
+        self.action_cancel_sheet.setEnabled(has_scan and self.canvas.mode == self.canvas.MODE_NEW_SHEET)
+        self.action_add_cal.setEnabled(has_scan and has_sheet)
+        self.action_add_outline.setEnabled(has_scan and has_sheet)
+        self.action_delete_sheet.setEnabled(has_sheet)
+        self.action_delete_point.setEnabled(has_point)
+        self.action_use_as_corner.setEnabled(has_point and (not point_is_corner))
+        self.action_export_kap.setEnabled(bool(self.current_scan and self.current_scan.sheets))
+        self.action_export_all_kap.setEnabled(bool(self.scans))
+        self.action_zoom_in.setEnabled(has_scan)
+        self.action_zoom_out.setEnabled(has_scan)
+        self.action_zoom_reset.setEnabled(has_scan)
+
+    def on_sheet_tree_context_menu(self, pos) -> None:
+        item = self.sheet_tree.itemAt(pos)
+        if item is None:
+            return
+
+        clicked_key = self.tree_key_from_data(item.data(0, Qt.UserRole))
+        if clicked_key is None:
+            return
+
+        if item is not self.sheet_tree.currentItem():
+            self.sheet_tree.setCurrentItem(item)
+            current = self.sheet_tree.currentItem()
+            if current is None or self.tree_key_from_data(current.data(0, Qt.UserRole)) != clicked_key:
+                return
+            item = current
+
+        data = item.data(0, Qt.UserRole)
+        if not isinstance(data, dict):
+            return
+
+        menu = QMenu(self)
+        item_type = data.get("type")
+
+        if item_type in {"scan", "sheet"}:
+            menu.addAction(self.action_new_sheet)
+        if item_type == "sheet":
+            menu.addAction(self.action_delete_sheet)
+            menu.addSeparator()
+            menu.addAction(self.action_add_outline)
+            menu.addAction(self.action_add_cal)
+        elif item_type == "corner_group":
+            menu.addAction(self.action_add_outline)
+        elif item_type == "cal_group":
+            menu.addAction(self.action_add_cal)
+        elif item_type == "point":
+            menu.addAction(self.action_delete_point)
+            if self.canvas.selected_point is not None and not self.canvas.selected_point.is_corner:
+                menu.addAction(self.action_use_as_corner)
+
+        if menu.isEmpty():
+            return
+        menu.exec(self.sheet_tree.viewport().mapToGlobal(pos))
 
     def delete_sheet(self) -> None:
         idx = self.canvas.selected_sheet_idx
@@ -2128,6 +2116,7 @@ class MainWindow(QMainWindow):
         self.canvas.selected_point_idx = None
         self.refresh_sheet_list()
         self.canvas.update()
+        self.refresh_action_states()
 
     def delete_selected_point(self) -> None:
         sheet = self.canvas.selected_sheet
@@ -2155,6 +2144,7 @@ class MainWindow(QMainWindow):
         self.canvas.selected_point_idx = None
         self.refresh_sheet_list()
         self.canvas.update()
+        self.refresh_action_states()
 
     def use_selected_point_as_corner(self) -> None:
         point = self.canvas.selected_point
@@ -2171,6 +2161,7 @@ class MainWindow(QMainWindow):
         point.is_corner = True
         self.refresh_sheet_list()
         self.canvas.update()
+        self.refresh_action_states()
 
     def refresh_sheet_list(self) -> None:
         vbar = self.sheet_tree.verticalScrollBar()
@@ -2370,10 +2361,8 @@ class MainWindow(QMainWindow):
     def refresh_editors(self) -> None:
         sheet = self.canvas.selected_sheet
         point = self.canvas.selected_point
-        has_scan = self.current_scan is not None
         has_sheet = sheet is not None
         has_point = point is not None
-        point_is_corner = bool(point.is_corner) if point is not None else False
 
         self.name_edit.blockSignals(True)
         self.scale_edit.blockSignals(True)
@@ -2410,21 +2399,10 @@ class MainWindow(QMainWindow):
         self.lat_edit.setEnabled(has_point)
         self.btn_save_point.setEnabled(has_point)
 
-        self.btn_delete_sheet.setEnabled(has_sheet)
-        self.btn_delete_point.setEnabled(has_point)
-        self.btn_use_as_corner.setEnabled(has_point and (not point_is_corner))
-
-        self.btn_new_sheet.setEnabled(has_scan)
-        self.btn_add_cal.setEnabled(has_scan and has_sheet)
-        self.btn_add_outline.setEnabled(has_scan and has_sheet)
-        self.btn_select_mode.setEnabled(has_scan)
-        self.btn_zoom_in.setEnabled(has_scan)
-        self.btn_zoom_out.setEnabled(has_scan)
-        self.btn_zoom_reset.setEnabled(has_scan)
-
         self.edit_point_key = self.current_selected_point_key()
         self._editor_baseline_lat = self.lat_edit.text().strip()
         self._editor_baseline_lon = self.lon_edit.text().strip()
+        self.refresh_action_states()
 
     def flush_current_sheet_meta(self) -> None:
         sheet = self.canvas.selected_sheet
@@ -2501,11 +2479,13 @@ class MainWindow(QMainWindow):
         )
         if not path_str:
             return
-        path = Path(path_str)
+        self.open_image_path(Path(path_str))
+
+    def open_image_path(self, path: Path) -> bool:
         test_pix = QPixmap(str(path))
         if test_pix.isNull():
             self.show_critical(self.tr("error_title"), self.tr("error_open_image"))
-            return
+            return False
         new_scan = Scan(
             name=path.stem,
             image_path=str(path),
@@ -2517,6 +2497,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self.fit_to_window)
         self.project_path = None
         self.update_window_title()
+        return True
 
     def import_map_files(self) -> None:
         file_list, _ = self.get_open_file_names(
@@ -2526,12 +2507,16 @@ class MainWindow(QMainWindow):
         )
         if not file_list:
             return
+        self.import_map_file_paths([Path(path_str) for path_str in file_list], show_summary=True)
+
+    def import_map_file_paths(self, file_paths: list[Path], show_summary: bool) -> bool:
+        if not file_paths:
+            return False
 
         ok = 0
         fail = 0
         last_scan_idx: Optional[int] = None
-        for path_str in file_list:
-            map_path = Path(path_str)
+        for map_path in file_paths:
             entry = parse_ozi_map_file(map_path)
             if entry is None:
                 fail += 1
@@ -2556,10 +2541,12 @@ class MainWindow(QMainWindow):
             self.set_current_scan(last_scan_idx)
             self.project_path = None
             self.update_window_title()
-        self.show_information(
-            self.tr("import_summary_title"),
-            self.tr("import_summary", ok=ok, fail=fail),
-        )
+        if show_summary:
+            self.show_information(
+                self.tr("import_summary_title"),
+                self.tr("import_summary", ok=ok, fail=fail),
+            )
+        return ok > 0
 
     @staticmethod
     def unique_kap_path(out_dir: Path, used_names: set[str], stem: str) -> Path:
@@ -2894,14 +2881,21 @@ class MainWindow(QMainWindow):
         self.update_window_title()
         return True
 
+    def open_path_argument(self, path: Path) -> bool:
+        suffix = path.suffix.lower()
+        if suffix == ".json":
+            return self.load_project_path(path)
+        if suffix == ".map":
+            return self.import_map_file_paths([path], show_summary=False)
+        return self.open_image_path(path)
+
 
 def main() -> int:
     app = QApplication(sys.argv)
     win = MainWindow()
     if len(sys.argv) >= 2:
         arg_path = Path(sys.argv[1]).expanduser()
-        if arg_path.suffix.lower() == ".json":
-            win.load_project_path(arg_path)
+        win.open_path_argument(arg_path)
     win.show()
     return app.exec()
 
