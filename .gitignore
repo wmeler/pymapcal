@@ -3,3 +3,5 @@ venv/
 .vscode/
 __pycache__/
 *.json
+*.swp
+geo_position_cases.jsonl
