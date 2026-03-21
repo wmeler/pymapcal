@@ -96,10 +96,7 @@ def _build_header(
 
 
 def _fmt_pixel(value: float) -> str:
-    rounded = round(value)
-    if abs(value - rounded) < 1e-7:
-        return str(int(rounded))
-    return f"{value:.6f}".rstrip("0").rstrip(".")
+    return str(int(round(value)))
 
 
 def run_kap_export_jobs(
@@ -113,6 +110,7 @@ def run_kap_export_jobs(
     log_path: Optional[Path] = None,
     progress_cb: Optional[Callable[[int, int, str], None]] = None,
     cancel_requested_cb: Optional[Callable[[], bool]] = None,
+    log_cb: Optional[Callable[[str], None]] = None,
 ) -> list[KapExportResult]:
     date_text = ed_date or dt.date.today().strftime("%m/%d/%Y")
     results: list[KapExportResult] = []
@@ -136,6 +134,7 @@ def run_kap_export_jobs(
             _append_log(
                 log_path,
                 f"[{_now_ts()}] CANCEL requested before next job start\n",
+                log_cb=log_cb,
             )
             break
         header_path: Optional[Path] = None
@@ -187,6 +186,7 @@ def run_kap_export_jobs(
                         f"box={crop_box[0]},{crop_box[1]}->{crop_box[2]-1},{crop_box[3]-1} "
                         f"size={working_job.width}x{working_job.height}\n"
                     ),
+                    log_cb=log_cb,
                 )
 
             header_text = _build_header(working_job, date_text, sounding_unit, sounding_datum)
@@ -204,6 +204,7 @@ def run_kap_export_jobs(
             _append_log(
                 log_path,
                 f"[{_now_ts()}] START sheet={job.sheet_name} cmd={_format_cmd(cmd)}\n",
+                log_cb=log_cb,
             )
             rc, stdout, stderr, cancelled_now = _run_command_cancellable(
                 cmd,
@@ -216,6 +217,7 @@ def run_kap_export_jobs(
                     f"stdout:\n{stdout}\n"
                     f"stderr:\n{stderr}\n"
                 ),
+                log_cb=log_cb,
             )
             if cancelled_now:
                 results.append(
@@ -253,6 +255,7 @@ def run_kap_export_jobs(
             _append_log(
                 log_path,
                 f"[{_now_ts()}] ERROR sheet={job.sheet_name} imgkap_not_found path={imgkap_path}\n",
+                log_cb=log_cb,
             )
             results.append(
                 KapExportResult(
@@ -266,6 +269,7 @@ def run_kap_export_jobs(
             _append_log(
                 log_path,
                 f"[{_now_ts()}] ERROR sheet={job.sheet_name} exception={exc}\n",
+                log_cb=log_cb,
             )
             results.append(
                 KapExportResult(
@@ -397,7 +401,12 @@ def _format_cmd(cmd: list[str]) -> str:
     return " ".join(shlex.quote(part) for part in cmd)
 
 
-def _append_log(log_path: Optional[Path], text: str) -> None:
+def _append_log(log_path: Optional[Path], text: str, log_cb: Optional[Callable[[str], None]] = None) -> None:
+    if log_cb is not None:
+        try:
+            log_cb(text)
+        except Exception:
+            pass
     if log_path is None:
         return
     try:

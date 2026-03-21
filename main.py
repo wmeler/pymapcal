@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QEvent, QPointF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QEventLoop, QPointF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QMouseEvent, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,7 +25,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QMenu,
-    QProgressDialog,
+    QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -37,13 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from kap_export import (
-    KapExportJob,
-    KapPolygonPoint,
-    KapReference,
-    run_kap_export_jobs,
-    sanitize_kap_stem,
-)
+from kap_export_service import KapExportIssue, collect_kap_export_plan, execute_kap_export_plan
 from geo_positioning import (
     CalibrationSnapResult,
     build_geo_transform,
@@ -161,6 +156,8 @@ TRANSLATIONS = {
         "export_progress_title": "Eksport KAP",
         "export_progress_label": "Generowanie KAP ({current}/{total}): {name}",
         "export_progress_cancel": "Anuluj",
+        "export_progress_log": "Log debugowy eksportu",
+        "export_progress_done": "Eksport zakończony. Kliknij OK, aby zamknąć.",
         "export_cancelled": "Eksport przerwany przez użytkownika ({done}/{total}).\nKatalog: {out}",
         "settings_dialog_title": "Ustawienia programu",
         "settings_field_language": "Język",
@@ -296,6 +293,8 @@ TRANSLATIONS = {
         "export_progress_title": "KAP export",
         "export_progress_label": "Generating KAP ({current}/{total}): {name}",
         "export_progress_cancel": "Cancel",
+        "export_progress_log": "Export debug log",
+        "export_progress_done": "Export finished. Click OK to close.",
         "export_cancelled": "Export canceled by user ({done}/{total}).\nDirectory: {out}",
         "settings_dialog_title": "Application settings",
         "settings_field_language": "Language",
@@ -728,6 +727,89 @@ def parse_scale_value(value: str) -> Optional[int]:
     if out <= 0:
         return None
     return out
+
+
+class KapExportProgressDialog(QDialog):
+    def __init__(self, parent: QWidget, tr_fn, total_jobs: int) -> None:
+        super().__init__(parent)
+        self._tr = tr_fn
+        self._total_jobs = max(0, total_jobs)
+        self._running = True
+        self._cancel_requested = False
+
+        self.setWindowTitle(self._tr("export_progress_title"))
+        layout = QVBoxLayout(self)
+
+        self.status_label = QLabel(
+            self._tr("export_progress_label", current=0, total=self._total_jobs, name="-"),
+            self,
+        )
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(self._total_jobs)
+        self.progress_bar.setValue(0)
+        layout.addWidget(self.progress_bar)
+
+        self.log_label = QLabel(self._tr("export_progress_log"), self)
+        layout.addWidget(self.log_label)
+
+        self.log_view = QPlainTextEdit(self)
+        self.log_view.setReadOnly(True)
+        self.log_view.setMinimumHeight(220)
+        layout.addWidget(self.log_view, 1)
+
+        self.button_box = QDialogButtonBox(self)
+        self.ok_button = self.button_box.addButton(QDialogButtonBox.Ok)
+        self.cancel_button = self.button_box.addButton(self._tr("export_progress_cancel"), QDialogButtonBox.RejectRole)
+        self.ok_button.setEnabled(False)
+        self.ok_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.request_cancel)
+        layout.addWidget(self.button_box)
+
+        self.resize(760, 420)
+
+    def request_cancel(self) -> None:
+        self._cancel_requested = True
+        self.cancel_button.setEnabled(False)
+
+    def is_cancel_requested(self) -> bool:
+        QApplication.processEvents()
+        return self._cancel_requested
+
+    def set_progress(self, done: int, total: int, name: str) -> None:
+        self.progress_bar.setMaximum(max(0, total))
+        self.progress_bar.setValue(max(0, min(done, total)))
+        self.status_label.setText(self._tr("export_progress_label", current=done, total=total, name=name))
+        QApplication.processEvents()
+
+    def append_log(self, text: str) -> None:
+        self.log_view.insertPlainText(text)
+        self.log_view.verticalScrollBar().setValue(self.log_view.verticalScrollBar().maximum())
+        QApplication.processEvents()
+
+    def finish(self, summary: str, details: list[str]) -> None:
+        self._running = False
+        self.status_label.setText(summary)
+        self.progress_bar.setValue(self.progress_bar.maximum())
+        if details:
+            self.append_log("\n" + "\n".join(details) + "\n")
+        self.append_log(f"\n[{self._tr('export_progress_done')}]\n")
+        self.ok_button.setEnabled(True)
+        self.ok_button.setDefault(True)
+        self.ok_button.setFocus()
+        self.cancel_button.hide()
+        QApplication.processEvents()
+
+    def closeEvent(self, event) -> None:
+        if self._running:
+            self.request_cancel()
+            event.ignore()
+            return
+        super().closeEvent(event)
+
 
 class MapCanvas(QWidget):
     cursorMoved = Signal(float, float, object)
@@ -2548,28 +2630,6 @@ class MainWindow(QMainWindow):
             )
         return ok > 0
 
-    @staticmethod
-    def unique_kap_path(out_dir: Path, used_names: set[str], stem: str) -> Path:
-        base = sanitize_kap_stem(stem, fallback="sheet")
-        candidate = base
-        idx = 2
-        while candidate.lower() in used_names or (out_dir / f"{candidate}.kap").exists():
-            candidate = f"{base}_{idx}"
-            idx += 1
-        used_names.add(candidate.lower())
-        return out_dir / f"{candidate}.kap"
-
-    @staticmethod
-    def point_geo_or_transform(
-        point: CalibrationPoint,
-        transform: Optional[GeoTransform],
-    ) -> Optional[tuple[float, float]]:
-        if point.lon is not None and point.lat is not None:
-            return float(point.lon), float(point.lat)
-        if transform is None:
-            return None
-        return transform.pixel_to_geo(point.x, point.y)
-
     def default_export_dir(self) -> Path:
         scan = self.current_scan
         if scan is not None and scan.image_path:
@@ -2578,99 +2638,25 @@ class MainWindow(QMainWindow):
                 return p.parent
         return Path.cwd()
 
-    def collect_kap_jobs_for_scans(self, scans: list[Scan], out_dir: Path) -> tuple[list[KapExportJob], list[str]]:
-        jobs: list[KapExportJob] = []
-        details: list[str] = []
-        used_stems: set[str] = set()
+    def format_kap_export_issue(self, issue: KapExportIssue) -> str:
+        if issue.code == "export_image_missing":
+            return f"[{issue.scan_name}] " + self.tr("export_image_missing", path=str(issue.path))
+        if issue.code == "export_image_open_error":
+            return f"[{issue.scan_name}] " + self.tr("export_image_open_error")
 
-        for scan in scans:
-            scan_name = scan.name.strip() or (Path(scan.image_path).stem if scan.image_path else "scan")
-            if not scan.sheets:
-                continue
-            image_path = Path(scan.image_path).expanduser()
-            if not image_path.exists():
-                details.append(f"[{scan_name}] " + self.tr("export_image_missing", path=str(image_path)))
-                continue
-            px = QPixmap(str(image_path))
-            if px.isNull():
-                details.append(f"[{scan_name}] " + self.tr("export_image_open_error"))
-                continue
-            width = px.width()
-            height = px.height()
+        sheet_label = f"{issue.scan_name}/{issue.sheet_name}" if issue.sheet_name else issue.scan_name
+        if issue.code == "export_sheet_scale_invalid":
+            return self.tr("export_sheet_scale_invalid", name=sheet_label, scale=issue.scale_text or "-")
+        if issue.code == "export_sheet_corners_missing":
+            return self.tr("export_sheet_corners_missing", name=sheet_label)
+        if issue.code == "export_sheet_geo_missing":
+            return self.tr("export_sheet_geo_missing", name=sheet_label)
+        return f"[{issue.code}] {sheet_label}"
 
-            for idx, sheet in enumerate(scan.sheets, start=1):
-                sheet_name = sheet.name.strip() or f"{self.tr('sheet_default')} {idx}"
-                sheet_label = f"{scan_name}/{sheet_name}"
-                scale_value = parse_scale_value(sheet.scale)
-                if scale_value is None:
-                    details.append(
-                        self.tr(
-                            "export_sheet_scale_invalid",
-                            name=sheet_label,
-                            scale=sheet.scale if sheet.scale else "-",
-                        )
-                    )
-                    continue
-
-                corners = [p for p in sheet.points if p.is_corner]
-                if len(corners) < 3:
-                    details.append(self.tr("export_sheet_corners_missing", name=sheet_label))
-                    continue
-
-                transform = build_geo_transform(sheet.points)
-                polygon: list[KapPolygonPoint] = []
-                missing_corner_geo = False
-                for p in corners:
-                    geo = self.point_geo_or_transform(p, transform)
-                    if geo is None:
-                        missing_corner_geo = True
-                        break
-                    polygon.append(
-                        KapPolygonPoint(
-                            pixel_x=p.x,
-                            pixel_y=p.y,
-                            lon=geo[0],
-                            lat=geo[1],
-                        )
-                    )
-                if missing_corner_geo:
-                    details.append(self.tr("export_sheet_geo_missing", name=sheet_label))
-                    continue
-
-                refs: list[KapReference] = []
-                for p in sheet.points:
-                    if p.is_corner:
-                        continue
-                    geo = self.point_geo_or_transform(p, transform)
-                    if geo is None:
-                        continue
-                    refs.append(
-                        KapReference(
-                            pixel_x=p.x,
-                            pixel_y=p.y,
-                            lon=geo[0],
-                            lat=geo[1],
-                        )
-                    )
-
-                out_path = self.unique_kap_path(out_dir, used_stems, f"{scan_name}_{sheet_name}")
-                jobs.append(
-                    KapExportJob(
-                        sheet_name=sheet_label,
-                        image_path=image_path,
-                        output_path=out_path,
-                        width=width,
-                        height=height,
-                        scale=scale_value,
-                        polygon=polygon,
-                        references=refs,
-                    )
-                )
-
-        return jobs, details
-
-    def run_kap_export_and_show_summary(self, jobs: list[KapExportJob], details: list[str], out_dir: Path) -> None:
-        if not jobs:
+    def run_kap_export_and_show_summary(self, scans: list[Scan], out_dir: Path) -> None:
+        plan = collect_kap_export_plan(scans, out_dir, self.tr("sheet_default"))
+        details = [self.format_kap_export_issue(issue) for issue in plan.issues]
+        if not plan.jobs:
             self.show_warning(
                 self.tr("export_title"),
                 self.tr("export_summary", ok=0, fail=len(details), out=str(out_dir))
@@ -2678,53 +2664,29 @@ class MainWindow(QMainWindow):
             )
             return
 
-        pre_fail = len(details)
         debug_temp_dir = Path(self.imgkap_work_dir).expanduser() if self.imgkap_work_dir else None
-        progress = QProgressDialog(self)
-        progress.setWindowTitle(self.tr("export_progress_title"))
-        progress.setLabelText(self.tr("export_progress_label", current=0, total=len(jobs), name="-"))
-        progress.setCancelButtonText(self.tr("export_progress_cancel"))
-        progress.setMinimum(0)
-        progress.setMaximum(len(jobs))
-        progress.setValue(0)
-        self.prepare_dialog(progress)
-        progress.setMinimumDuration(0)
-        progress.setAutoClose(False)
-        progress.setAutoReset(False)
-        progress.show()
+        dialog = KapExportProgressDialog(self, self.tr, len(plan.jobs))
+        self.prepare_dialog(dialog)
+        if details:
+            dialog.append_log("[PRECHECK]\n" + "\n".join(details) + "\n\n")
+        dialog.show()
         QApplication.processEvents()
-        cancel_requested = False
 
-        def on_cancel() -> None:
-            nonlocal cancel_requested
-            cancel_requested = True
+        run_results = execute_kap_export_plan(
+            jobs=plan.jobs,
+            imgkap_path=self.imgkap_path,
+            sounding_datum=self.kap_sounding_datum,
+            temp_dir=debug_temp_dir,
+            progress_cb=dialog.set_progress,
+            cancel_requested_cb=dialog.is_cancel_requested,
+            log_cb=dialog.append_log,
+        )
 
-        progress.canceled.connect(on_cancel)
-
-        def on_progress(done: int, total: int, name: str) -> None:
-            progress.setLabelText(self.tr("export_progress_label", current=done, total=total, name=name))
-            progress.setValue(done)
-            QApplication.processEvents()
-
-        def is_cancel_requested() -> bool:
-            QApplication.processEvents()
-            return cancel_requested or progress.wasCanceled()
-
-        try:
-            run_results = run_kap_export_jobs(
-                jobs=jobs,
-                imgkap_path=self.imgkap_path,
-                sounding_datum=self.kap_sounding_datum,
-                temp_dir=debug_temp_dir,
-                progress_cb=on_progress,
-                cancel_requested_cb=is_cancel_requested,
-            )
-        finally:
-            progress.close()
         ok = 0
         run_fail = 0
         cancelled = False
         imgkap_missing_reported = False
+        post_details = list(details)
         for result in run_results:
             if result.success:
                 ok += 1
@@ -2735,30 +2697,28 @@ class MainWindow(QMainWindow):
             run_fail += 1
             if result.error == "imgkap_not_found":
                 if not imgkap_missing_reported:
-                    details.append(self.tr("export_sheet_imgkap_missing", path=self.imgkap_path))
+                    post_details.append(self.tr("export_sheet_imgkap_missing", path=self.imgkap_path))
                     imgkap_missing_reported = True
                 continue
-            details.append(self.tr("export_sheet_imgkap_failed", name=result.sheet_name))
+            post_details.append(self.tr("export_sheet_imgkap_failed", name=result.sheet_name))
             if result.stderr:
-                details.append(f"  {result.stderr.splitlines()[0]}")
+                post_details.append(f"  {result.stderr.splitlines()[0]}")
             elif result.stdout:
-                details.append(f"  {result.stdout.splitlines()[0]}")
-        if not cancelled and (cancel_requested or progress.wasCanceled()) and len(run_results) < len(jobs):
+                post_details.append(f"  {result.stdout.splitlines()[0]}")
+
+        if not cancelled and dialog.is_cancel_requested() and len(run_results) < len(plan.jobs):
             cancelled = True
 
-        total_fail = pre_fail + run_fail
+        total_fail = len(plan.issues) + run_fail
         if cancelled:
-            summary = self.tr("export_cancelled", done=len(run_results), total=len(jobs), out=str(out_dir))
+            summary = self.tr("export_cancelled", done=len(run_results), total=len(plan.jobs), out=str(out_dir))
         else:
             summary = self.tr("export_summary", ok=ok, fail=total_fail, out=str(out_dir))
-        details_text = "\n".join(details[:40])
-        if cancelled or total_fail > 0 or details:
-            self.show_warning(
-                self.tr("export_title"),
-                summary + ("\n\n" + details_text if details_text else ""),
-            )
-        else:
-            self.show_information(self.tr("export_title"), summary)
+
+        dialog.finish(summary, post_details[len(details):])
+        wait_loop = QEventLoop(self)
+        dialog.finished.connect(wait_loop.quit)
+        wait_loop.exec()
 
     def export_kap_current_scan(self) -> None:
         self.flush_current_sheet_meta()
@@ -2777,8 +2737,7 @@ class MainWindow(QMainWindow):
         if not out_dir_str:
             return
         out_dir = Path(out_dir_str)
-        jobs, details = self.collect_kap_jobs_for_scans([scan], out_dir)
-        self.run_kap_export_and_show_summary(jobs, details, out_dir)
+        self.run_kap_export_and_show_summary([scan], out_dir)
 
     def export_kap_all_scans(self) -> None:
         self.flush_current_sheet_meta()
@@ -2796,8 +2755,7 @@ class MainWindow(QMainWindow):
         if not out_dir_str:
             return
         out_dir = Path(out_dir_str)
-        jobs, details = self.collect_kap_jobs_for_scans(self.scans, out_dir)
-        self.run_kap_export_and_show_summary(jobs, details, out_dir)
+        self.run_kap_export_and_show_summary(self.scans, out_dir)
 
     def save_project(self) -> None:
         self.flush_current_sheet_meta()
