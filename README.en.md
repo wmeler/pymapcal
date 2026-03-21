@@ -31,6 +31,8 @@ build_pyinstaller.bat
 
 The bundled app will be created in `./dist/pymapcal/`.
 
+If `IMGKAP_SRC_DIR` points to an `imgkap` source tree containing `imgkap.c`, the build script will also compile `imgkap(.exe)` and bundle it next to the app. On Windows this expects `gcc` and `FreeImage` to be available. If `FreeImage.dll` is not on `PATH`, set `FREEIMAGE_DLL` before running the build.
+
 ## Usage
 1. `File -> Add map scan` (`tif/tiff/bmp/png/jpg/jpeg`).
    - or `File -> Import MAP...` to import calibration from OziExplorer `.map` files.

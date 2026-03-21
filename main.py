@@ -57,6 +57,15 @@ def app_base_path() -> Path:
     return Path(__file__).resolve().parent
 
 
+def default_imgkap_path() -> str:
+    base = app_base_path()
+    candidates = [base / "imgkap.exe", base / "imgkap"]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return "imgkap"
+
+
 TRANSLATIONS = {
     "pl": {
         "settings_json_object": "Plik .pymapcal musi być obiektem JSON.",
@@ -500,6 +509,7 @@ class DisplaySettings:
 
 
 def load_display_settings() -> tuple[DisplaySettings, str, Optional[Path], str, str, str, Optional[str]]:
+    fallback_imgkap = default_imgkap_path()
     candidates = [Path.cwd() / ".pymapcal", Path.home() / ".pymapcal"]
     for path in candidates:
         if not path.exists():
@@ -507,13 +517,13 @@ def load_display_settings() -> tuple[DisplaySettings, str, Optional[Path], str, 
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
-                return DisplaySettings(), "pl", path, "imgkap", "UNKNOWN", "", t("pl", "settings_json_object")
+                return DisplaySettings(), "pl", path, fallback_imgkap, "UNKNOWN", "", t("pl", "settings_json_object")
             lang = raw.get("language", "pl")
             if lang not in ("pl", "en"):
                 lang = "pl"
-            imgkap_path = raw.get("imgkap_path", "imgkap")
+            imgkap_path = raw.get("imgkap_path", fallback_imgkap)
             if not isinstance(imgkap_path, str) or not imgkap_path.strip():
-                imgkap_path = "imgkap"
+                imgkap_path = fallback_imgkap
             sounding_datum = raw.get("kap_sounding_datum", "UNKNOWN")
             if not isinstance(sounding_datum, str) or not sounding_datum.strip():
                 sounding_datum = "UNKNOWN"
@@ -534,8 +544,8 @@ def load_display_settings() -> tuple[DisplaySettings, str, Optional[Path], str, 
                 None,
             )
         except Exception as exc:
-            return DisplaySettings(), "pl", path, "imgkap", "UNKNOWN", "", t("pl", "settings_load_error", error=exc)
-    return DisplaySettings(), "pl", None, "imgkap", "UNKNOWN", "", None
+            return DisplaySettings(), "pl", path, fallback_imgkap, "UNKNOWN", "", t("pl", "settings_load_error", error=exc)
+    return DisplaySettings(), "pl", None, fallback_imgkap, "UNKNOWN", "", None
 
 
 def format_dmm(value: float, kind: str) -> str:

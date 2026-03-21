@@ -31,6 +31,8 @@ build_pyinstaller.bat
 
 Gotowy build pojawi się w `./dist/pymapcal/`.
 
+Jeśli `IMGKAP_SRC_DIR` wskazuje na drzewo źródeł `imgkap` zawierające `imgkap.c`, skrypt builda spróbuje też zbudować `imgkap(.exe)` i dołączyć go obok aplikacji. Na Windowsie wymaga to dostępnego `gcc` oraz `FreeImage`. Jeśli `FreeImage.dll` nie jest na `PATH`, ustaw `FREEIMAGE_DLL` przed buildem.
+
 ## Obsługa
 1. `Plik -> Dodaj skan mapy` (tif/tiff/bmp/png/jpg/jpeg).
    - lub `Plik -> Importuj MAP...` aby zaimportować kalibrację z plików OziExplorer `.map`.

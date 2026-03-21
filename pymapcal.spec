@@ -4,17 +4,24 @@ from pathlib import Path
 
 
 project_root = Path.cwd().resolve()
+build_support_dir = project_root / "build_support"
 datas = [
     (str(project_root / "README.md"), "."),
     (str(project_root / "README.pl.md"), "."),
     (str(project_root / "README.en.md"), "."),
 ]
+binaries = []
+
+for candidate_name in ("imgkap.exe", "imgkap", "FreeImage.dll"):
+    candidate = build_support_dir / candidate_name
+    if candidate.exists():
+        binaries.append((str(candidate), "."))
 
 
 a = Analysis(
     ["main.py"],
     pathex=[str(project_root)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=[],
     hookspath=[],
