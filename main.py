@@ -46,6 +46,7 @@ from geo_positioning import (
     point_in_polygon,
     snap_calibration_position,
 )
+from wz_downloader import download_wz_messages
 
 
 def app_base_path() -> Path:
@@ -102,6 +103,7 @@ TRANSLATIONS = {
         "menu_export_all_kap": "Eksportuj wszystkie arkusze do KAP...",
         "menu_settings": "Ustawienia",
         "menu_edit_settings": "Edytuj ustawienia...",
+        "menu_download_wz": "Pobierz wiadomości żeglarskie",
         "menu_help": "Pomoc",
         "menu_readme": "README",
         "help_title": "Pomoc",
@@ -198,6 +200,14 @@ TRANSLATIONS = {
         "settings_save_error": "Nie udało się zapisać ustawień:\n{error}",
         "settings_invalid_color": "Niepoprawny kolor. Użyj formatu #RRGGBB.",
         "settings_lang_restart_hint": "Zmiana języka będzie w pełni widoczna po ponownym uruchomieniu aplikacji.",
+        "wz_title": "Wiadomości żeglarskie",
+        "wz_progress_title": "Pobieranie wiadomości żeglarskich",
+        "wz_progress_label": "Postęp: {name}",
+        "wz_progress_log": "Log pobierania",
+        "wz_progress_done": "Pobieranie zakończone. Kliknij OK, aby zamknąć.",
+        "wz_summary": "Wiadomości żeglarskie: znalezione {total}, pobrane {downloaded}, pominięte {skipped}, błędy {failed}\nKatalog: {out}",
+        "wz_cancelled": "Pobieranie przerwane przez użytkownika.\nKatalog: {out}",
+        "wz_none_found": "Nie znaleziono plików WZ*.pdf.\nKatalog: {out}",
     },
     "en": {
         "settings_json_object": ".pymapcal must be a JSON object.",
@@ -239,6 +249,7 @@ TRANSLATIONS = {
         "menu_export_all_kap": "Export all sheets to KAP...",
         "menu_settings": "Settings",
         "menu_edit_settings": "Edit settings...",
+        "menu_download_wz": "Download navigational notices",
         "menu_help": "Help",
         "menu_readme": "README",
         "help_title": "Help",
@@ -335,6 +346,14 @@ TRANSLATIONS = {
         "settings_save_error": "Failed to save settings:\n{error}",
         "settings_invalid_color": "Invalid color. Use #RRGGBB format.",
         "settings_lang_restart_hint": "Language change is fully applied after restarting the app.",
+        "wz_title": "Navigational notices",
+        "wz_progress_title": "Downloading navigational notices",
+        "wz_progress_label": "Progress: {name}",
+        "wz_progress_log": "Download log",
+        "wz_progress_done": "Download finished. Click OK to close.",
+        "wz_summary": "Navigational notices: found {total}, downloaded {downloaded}, skipped {skipped}, errors {failed}\nDirectory: {out}",
+        "wz_cancelled": "Download canceled by user.\nDirectory: {out}",
+        "wz_none_found": "No WZ*.pdf files found.\nDirectory: {out}",
     },
 }
 
@@ -812,6 +831,84 @@ class KapExportProgressDialog(QDialog):
         if details:
             self.append_log("\n" + "\n".join(details) + "\n")
         self.append_log(f"\n[{self._tr('export_progress_done')}]\n")
+        self.ok_button.setEnabled(True)
+        self.ok_button.setDefault(True)
+        self.ok_button.setFocus()
+        self.cancel_button.hide()
+        QApplication.processEvents()
+
+    def closeEvent(self, event) -> None:
+        if self._running:
+            self.request_cancel()
+            event.ignore()
+            return
+        super().closeEvent(event)
+
+
+class WzDownloadProgressDialog(QDialog):
+    def __init__(self, parent: QWidget, tr_fn) -> None:
+        super().__init__(parent)
+        self._tr = tr_fn
+        self._running = True
+        self._cancel_requested = False
+
+        self.setWindowTitle(self._tr("wz_progress_title"))
+        layout = QVBoxLayout(self)
+
+        self.status_label = QLabel(self._tr("wz_progress_label", name="-"), self)
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(1)
+        self.progress_bar.setValue(0)
+        layout.addWidget(self.progress_bar)
+
+        self.log_label = QLabel(self._tr("wz_progress_log"), self)
+        layout.addWidget(self.log_label)
+
+        self.log_view = QPlainTextEdit(self)
+        self.log_view.setReadOnly(True)
+        self.log_view.setMinimumHeight(220)
+        layout.addWidget(self.log_view, 1)
+
+        self.button_box = QDialogButtonBox(self)
+        self.ok_button = self.button_box.addButton(QDialogButtonBox.Ok)
+        self.cancel_button = self.button_box.addButton(self._tr("export_progress_cancel"), QDialogButtonBox.RejectRole)
+        self.ok_button.setEnabled(False)
+        self.ok_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.request_cancel)
+        layout.addWidget(self.button_box)
+
+        self.resize(760, 420)
+
+    def request_cancel(self) -> None:
+        self._cancel_requested = True
+        self.cancel_button.setEnabled(False)
+
+    def is_cancel_requested(self) -> bool:
+        QApplication.processEvents()
+        return self._cancel_requested
+
+    def set_progress(self, current: int, total: int, name: str) -> None:
+        self.progress_bar.setMaximum(max(1, total))
+        self.progress_bar.setValue(max(0, min(current, total)))
+        self.status_label.setText(self._tr("wz_progress_label", name=name))
+        QApplication.processEvents()
+
+    def append_log(self, text: str) -> None:
+        self.log_view.insertPlainText(text)
+        self.log_view.verticalScrollBar().setValue(self.log_view.verticalScrollBar().maximum())
+        QApplication.processEvents()
+
+    def finish(self, summary: str, details: list[str]) -> None:
+        self._running = False
+        self.status_label.setText(summary)
+        self.progress_bar.setValue(self.progress_bar.maximum())
+        if details:
+            self.append_log("\n" + "\n".join(details) + "\n")
+        self.append_log(f"\n[{self._tr('wz_progress_done')}]\n")
         self.ok_button.setEnabled(True)
         self.ok_button.setDefault(True)
         self.ok_button.setFocus()
@@ -1756,6 +1853,9 @@ class MainWindow(QMainWindow):
         self.action_edit_settings = QAction(self.tr("menu_edit_settings"), self)
         self.action_edit_settings.triggered.connect(self.edit_settings)
 
+        self.action_download_wz = QAction(self.tr("menu_download_wz"), self)
+        self.action_download_wz.triggered.connect(self.download_wz_notices)
+
         self.action_show_readme = QAction(self.tr("menu_readme"), self)
         self.action_show_readme.triggered.connect(self.show_readme_help)
 
@@ -1783,6 +1883,8 @@ class MainWindow(QMainWindow):
         self.menu_sheet.addAction(self.action_export_kap)
 
         self.menu_tools = self.menuBar().addMenu(self.tr("menu_tools"))
+        self.menu_tools.addAction(self.action_download_wz)
+        self.menu_tools.addSeparator()
         self.menu_tools.addAction(self.action_edit_settings)
 
         self.menu_view = self.menuBar().addMenu(self.tr("menu_view"))
@@ -1839,6 +1941,7 @@ class MainWindow(QMainWindow):
         self.action_zoom_in.setText(self.tr("btn_zoom_in"))
         self.action_zoom_out.setText(self.tr("btn_zoom_out"))
         self.action_zoom_reset.setText(self.tr("btn_zoom_reset"))
+        self.action_download_wz.setText(self.tr("menu_download_wz"))
         self.action_edit_settings.setText(self.tr("menu_edit_settings"))
         self.menu_help.setTitle(self.tr("menu_help"))
         self.action_show_readme.setText(self.tr("menu_readme"))
@@ -2022,6 +2125,45 @@ class MainWindow(QMainWindow):
         buttons.button(QDialogButtonBox.Close).clicked.connect(dlg.close)
         layout.addWidget(buttons)
         dlg.exec()
+
+    def download_wz_notices(self) -> None:
+        out_dir = Path.cwd() / "WZ"
+        dialog = WzDownloadProgressDialog(self, self.tr)
+        self.prepare_dialog(dialog)
+        dialog.show()
+        QApplication.processEvents()
+
+        try:
+            result = download_wz_messages(
+                out_dir=out_dir,
+                log_cb=dialog.append_log,
+                progress_cb=dialog.set_progress,
+                cancel_requested_cb=dialog.is_cancel_requested,
+            )
+        except Exception as exc:
+            dialog._running = False
+            dialog.close()
+            self.show_critical(self.tr("wz_title"), str(exc))
+            return
+
+        if result.cancelled:
+            summary = self.tr("wz_cancelled", out=str(out_dir))
+        elif result.total_links == 0:
+            summary = self.tr("wz_none_found", out=str(out_dir))
+        else:
+            summary = self.tr(
+                "wz_summary",
+                total=result.total_links,
+                downloaded=result.downloaded,
+                skipped=result.skipped,
+                failed=result.failed,
+                out=str(out_dir),
+            )
+
+        dialog.finish(summary, result.errors)
+        wait_loop = QEventLoop(self)
+        dialog.finished.connect(wait_loop.quit)
+        wait_loop.exec()
 
     def on_cursor_moved(self, x: float, y: float, geo: Optional[tuple[float, float]]) -> None:
         zoom_pct = int(round(self.canvas.zoom_factor * 100))

@@ -30,6 +30,7 @@ build_pyinstaller.bat
 ```
 
 The bundled app will be created in `./dist/pymapcal/`.
+The build will also produce a separate CLI wrapper in `./dist/download_wz_pdfs/` for downloading navigational notices.
 
 If `IMGKAP_SRC_DIR` points to an `imgkap` source tree containing `imgkap.c`, the build script can also compile `imgkap(.exe)` and bundle it next to the app as a legacy backend. On Windows this expects `gcc` and `FreeImage` to be available. If `FreeImage.dll` is not on `PATH`, set `FREEIMAGE_DLL` before running the build.
 
@@ -75,7 +76,13 @@ If `IMGKAP_SRC_DIR` points to an `imgkap` source tree containing `imgkap.c`, the
   - each sheet must have scale set (for example `1:50000`),
   - outline points must have geo coordinates (missing values are estimated from current calibration when possible).
 - `Tools -> Edit settings...` lets you edit display parameters and language, then save to `.pymapcal`.
+- `Tools -> Download navigational notices` downloads `WZ*.pdf` files from BHMW into `./WZ` and shows a log with a progress bar.
 - KAP export uses the built-in Python backend by default; optionally you can point it to an external `imgkap` in `Tools -> Edit settings...`.
+
+Helper CLI wrapper:
+```bash
+python3 download_wz_pdfs.py --out-dir ./WZ
+```
 
 ## `.pymapcal` Settings
 The app loads settings from:

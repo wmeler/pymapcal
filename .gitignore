@@ -1,0 +1,5 @@
+WZ/
+venv/
+.vscode/
+__pycache__/
+*.json

@@ -30,6 +30,7 @@ build_pyinstaller.bat
 ```
 
 Gotowy build pojawi się w `./dist/pymapcal/`.
+Powstanie też osobny wrapper CLI `./dist/download_wz_pdfs/` do pobierania wiadomości żeglarskich.
 
 Jeśli `IMGKAP_SRC_DIR` wskazuje na drzewo źródeł `imgkap` zawierające `imgkap.c`, skrypt builda może też zbudować `imgkap(.exe)` i dołączyć go obok aplikacji jako backend legacy. Na Windowsie wymaga to dostępnego `gcc` oraz `FreeImage`. Jeśli `FreeImage.dll` nie jest na `PATH`, ustaw `FREEIMAGE_DLL` przed buildem.
 
@@ -73,9 +74,15 @@ Jeśli `IMGKAP_SRC_DIR` wskazuje na drzewo źródeł `imgkap` zawierające `imgk
   - każdy arkusz musi mieć skalę (np. `1:50000`),
   - punkty obrysu muszą mieć współrzędne geo (brakujące są wyliczane z bieżącej kalibracji, jeśli to możliwe).
 - `Narzędzia -> Edytuj ustawienia...` pozwala zmienić parametry wyświetlania i język oraz zapisać je do `.pymapcal`.
+- `Narzędzia -> Pobierz wiadomości żeglarskie` pobiera PDF-y `WZ*.pdf` z BHMW do katalogu `./WZ` i pokazuje log oraz pasek postępu.
 - Eksport KAP domyślnie używa wbudowanego backendu Pythona; opcjonalnie można podać ścieżkę do zewnętrznego `imgkap` w `Narzędzia -> Edytuj ustawienia...`.
 - `Plik -> Zapisz` zapisuje do aktualnie otwartego projektu (bez pytania),
 - `Plik -> Zapisz jako...` zapisuje pod nową nazwą/ścieżką.
+
+Pomocniczy wrapper CLI:
+```bash
+python3 download_wz_pdfs.py --out-dir ./WZ
+```
 
 ## Ustawienia `.pymapcal`
 Aplikacja wczytuje ustawienia z:
