@@ -31,7 +31,7 @@ build_pyinstaller.bat
 
 The bundled app will be created in `./dist/pymapcal/`.
 
-If `IMGKAP_SRC_DIR` points to an `imgkap` source tree containing `imgkap.c`, the build script will also compile `imgkap(.exe)` and bundle it next to the app. On Windows this expects `gcc` and `FreeImage` to be available. If `FreeImage.dll` is not on `PATH`, set `FREEIMAGE_DLL` before running the build.
+If `IMGKAP_SRC_DIR` points to an `imgkap` source tree containing `imgkap.c`, the build script can also compile `imgkap(.exe)` and bundle it next to the app as a legacy backend. On Windows this expects `gcc` and `FreeImage` to be available. If `FreeImage.dll` is not on `PATH`, set `FREEIMAGE_DLL` before running the build.
 
 ## Usage
 1. `File -> Add map scan` (`tif/tiff/bmp/png/jpg/jpeg`).
@@ -75,7 +75,7 @@ If `IMGKAP_SRC_DIR` points to an `imgkap` source tree containing `imgkap.c`, the
   - each sheet must have scale set (for example `1:50000`),
   - outline points must have geo coordinates (missing values are estimated from current calibration when possible).
 - `Tools -> Edit settings...` lets you edit display parameters and language, then save to `.pymapcal`.
-- `imgkap` executable location is configurable in `Tools -> Edit settings...`.
+- KAP export uses the built-in Python backend by default; optionally you can point it to an external `imgkap` in `Tools -> Edit settings...`.
 
 ## `.pymapcal` Settings
 The app loads settings from:
@@ -86,15 +86,15 @@ File format: JSON (either direct keys or nested under `display`).
 
 i18n:
 - `language: "pl"` or `language: "en"`
-- `imgkap_path`: path to `imgkap` executable (for example `imgkap` or `/home/user/imgkap/imgkap`)
-- `imgkap_work_dir`: optional KAP export debug directory; when set, it stores `imgkap_calls.log` and all temporary files
+- `imgkap_path`: `python` for the built-in exporter or a path to an `imgkap` executable (for example `/home/user/imgkap/imgkap`)
+- `imgkap_work_dir`: optional KAP export debug directory; when set, it stores `kap_export.log` and all temporary files
 - `kap_sounding_datum`: `SD` value written to KAP header (for example `UNKNOWN`)
 
 Example:
 ```json
 {
   "language": "en",
-  "imgkap_path": "imgkap",
+  "imgkap_path": "python",
   "imgkap_work_dir": "",
   "kap_sounding_datum": "UNKNOWN",
   "display": {

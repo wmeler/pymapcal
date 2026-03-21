@@ -31,7 +31,7 @@ build_pyinstaller.bat
 
 Gotowy build pojawi się w `./dist/pymapcal/`.
 
-Jeśli `IMGKAP_SRC_DIR` wskazuje na drzewo źródeł `imgkap` zawierające `imgkap.c`, skrypt builda spróbuje też zbudować `imgkap(.exe)` i dołączyć go obok aplikacji. Na Windowsie wymaga to dostępnego `gcc` oraz `FreeImage`. Jeśli `FreeImage.dll` nie jest na `PATH`, ustaw `FREEIMAGE_DLL` przed buildem.
+Jeśli `IMGKAP_SRC_DIR` wskazuje na drzewo źródeł `imgkap` zawierające `imgkap.c`, skrypt builda może też zbudować `imgkap(.exe)` i dołączyć go obok aplikacji jako backend legacy. Na Windowsie wymaga to dostępnego `gcc` oraz `FreeImage`. Jeśli `FreeImage.dll` nie jest na `PATH`, ustaw `FREEIMAGE_DLL` przed buildem.
 
 ## Obsługa
 1. `Plik -> Dodaj skan mapy` (tif/tiff/bmp/png/jpg/jpeg).
@@ -73,7 +73,7 @@ Jeśli `IMGKAP_SRC_DIR` wskazuje na drzewo źródeł `imgkap` zawierające `imgk
   - każdy arkusz musi mieć skalę (np. `1:50000`),
   - punkty obrysu muszą mieć współrzędne geo (brakujące są wyliczane z bieżącej kalibracji, jeśli to możliwe).
 - `Narzędzia -> Edytuj ustawienia...` pozwala zmienić parametry wyświetlania i język oraz zapisać je do `.pymapcal`.
-- Ścieżka do binarki `imgkap` jest konfigurowalna w `Narzędzia -> Edytuj ustawienia...`.
+- Eksport KAP domyślnie używa wbudowanego backendu Pythona; opcjonalnie można podać ścieżkę do zewnętrznego `imgkap` w `Narzędzia -> Edytuj ustawienia...`.
 - `Plik -> Zapisz` zapisuje do aktualnie otwartego projektu (bez pytania),
 - `Plik -> Zapisz jako...` zapisuje pod nową nazwą/ścieżką.
 
@@ -86,15 +86,15 @@ Format pliku: JSON (może być bezpośrednio lub pod kluczem `display`).
 
 Obsługa i18n:
 - `language: "pl"` lub `language: "en"`
-- `imgkap_path`: ścieżka do binarki `imgkap` (np. `imgkap` lub `/home/user/imgkap/imgkap`)
-- `imgkap_work_dir`: opcjonalny katalog debug eksportu KAP; jeśli ustawiony, zapisuje tam log `imgkap_calls.log` i wszystkie pliki tymczasowe
+- `imgkap_path`: `python` dla wbudowanego eksportera albo ścieżka do binarki `imgkap` (np. `/home/user/imgkap/imgkap`)
+- `imgkap_work_dir`: opcjonalny katalog debug eksportu KAP; jeśli ustawiony, zapisuje tam log `kap_export.log` i wszystkie pliki tymczasowe
 - `kap_sounding_datum`: wartość `SD` zapisywana w nagłówku KAP (np. `UNKNOWN`)
 
 Przykład:
 ```json
 {
   "language": "pl",
-  "imgkap_path": "imgkap",
+  "imgkap_path": "python",
   "imgkap_work_dir": "",
   "kap_sounding_datum": "UNKNOWN",
   "display": {

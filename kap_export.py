@@ -12,6 +12,8 @@ from typing import Callable, Optional
 
 from PySide6.QtGui import QImage
 
+from kap_encoder import KapEncodeCancelled, write_kap_file
+
 
 @dataclass
 class KapReference:
@@ -112,7 +114,7 @@ def run_kap_export_jobs(
     cancel_requested_cb: Optional[Callable[[], bool]] = None,
     log_cb: Optional[Callable[[str], None]] = None,
 ) -> list[KapExportResult]:
-    date_text = ed_date or dt.date.today().strftime("%m/%d/%Y")
+    date_text = ed_date or dt.date.today().strftime("%d/%m/%Y")
     results: list[KapExportResult] = []
     normalized_cache: dict[Path, Path] = {}
     temp_images: list[Path] = []
@@ -126,7 +128,7 @@ def run_kap_export_jobs(
     if temp_dir is not None:
         temp_dir.mkdir(parents=True, exist_ok=True)
         if log_path is None:
-            log_path = temp_dir / "imgkap_calls.log"
+            log_path = temp_dir / "kap_export.log"
 
     processed = 0
     for job in jobs:
@@ -137,9 +139,9 @@ def run_kap_export_jobs(
                 log_cb=log_cb,
             )
             break
-        header_path: Optional[Path] = None
         sheet_prefix = f"{sanitize_kap_stem(job.sheet_name, fallback='sheet')}_"
         cancelled_now = False
+        header_path: Optional[Path] = None
         try:
             source_image: Path
             if keep_temps:
@@ -190,26 +192,47 @@ def run_kap_export_jobs(
                 )
 
             header_text = _build_header(working_job, date_text, sounding_unit, sounding_datum)
-            header_path = _new_temp_path(".txt", f"{sheet_prefix}hdr_", temp_dir=temp_dir)
-            header_path.write_text(header_text, encoding="utf-8")
-
-            cmd = [
-                imgkap_path,
-                "-p",
-                palette,
-                str(working_image),
-                str(header_path),
-                str(job.output_path),
-            ]
-            _append_log(
-                log_path,
-                f"[{_now_ts()}] START sheet={job.sheet_name} cmd={_format_cmd(cmd)}\n",
-                log_cb=log_cb,
-            )
-            rc, stdout, stderr, cancelled_now = _run_command_cancellable(
-                cmd,
-                cancel_requested_cb=cancel_requested_cb,
-            )
+            use_python_backend = not imgkap_path.strip() or imgkap_path.strip().lower() == "python"
+            if use_python_backend:
+                _append_log(
+                    log_path,
+                    (
+                        f"[{_now_ts()}] START sheet={job.sheet_name} backend=python "
+                        f"requested={imgkap_path} palette={palette} "
+                        f"image={working_image} output={job.output_path}\n"
+                    ),
+                    log_cb=log_cb,
+                )
+                write_kap_file(
+                    image_path=working_image,
+                    output_path=job.output_path,
+                    header_text=header_text,
+                    log_cb=lambda text: _append_log(log_path, text, log_cb=log_cb),
+                    cancel_requested_cb=cancel_requested_cb,
+                )
+                rc = 0
+                stdout = "python encoder"
+                stderr = ""
+            else:
+                header_path = _new_temp_path(".txt", f"{sheet_prefix}hdr_", temp_dir=temp_dir)
+                header_path.write_text(header_text, encoding="utf-8")
+                cmd = [
+                    imgkap_path,
+                    "-p",
+                    palette,
+                    str(working_image),
+                    str(header_path),
+                    str(job.output_path),
+                ]
+                _append_log(
+                    log_path,
+                    f"[{_now_ts()}] START sheet={job.sheet_name} backend=imgkap cmd={_format_cmd(cmd)}\n",
+                    log_cb=log_cb,
+                )
+                rc, stdout, stderr, cancelled_now = _run_command_cancellable(
+                    cmd,
+                    cancel_requested_cb=cancel_requested_cb,
+                )
             _append_log(
                 log_path,
                 (
@@ -230,7 +253,7 @@ def run_kap_export_jobs(
                         stderr=stderr.strip(),
                     )
                 )
-            elif rc == 0 and job.output_path.exists():
+            elif job.output_path.exists():
                 results.append(
                     KapExportResult(
                         sheet_name=job.sheet_name,
@@ -246,11 +269,26 @@ def run_kap_export_jobs(
                         sheet_name=job.sheet_name,
                         output_path=job.output_path,
                         success=False,
-                        error="imgkap_failed" if rc != 0 else "kap_not_created",
+                        error="kap_not_created",
                         stdout=stdout.strip(),
                         stderr=stderr.strip(),
                     )
                 )
+        except KapEncodeCancelled:
+            cancelled_now = True
+            _append_log(
+                log_path,
+                f"[{_now_ts()}] CANCEL sheet={job.sheet_name} during_python_encode\n",
+                log_cb=log_cb,
+            )
+            results.append(
+                KapExportResult(
+                    sheet_name=job.sheet_name,
+                    output_path=job.output_path,
+                    success=False,
+                    error="cancelled",
+                )
+            )
         except FileNotFoundError:
             _append_log(
                 log_path,

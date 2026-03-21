@@ -58,12 +58,7 @@ def app_base_path() -> Path:
 
 
 def default_imgkap_path() -> str:
-    base = app_base_path()
-    candidates = [base / "imgkap.exe", base / "imgkap"]
-    for candidate in candidates:
-        if candidate.exists():
-            return str(candidate)
-    return "imgkap"
+    return "python"
 
 
 TRANSLATIONS = {
@@ -169,7 +164,7 @@ TRANSLATIONS = {
         "export_sheet_scale_invalid": "Arkusz \"{name}\": niepoprawna skala \"{scale}\".",
         "export_sheet_corners_missing": "Arkusz \"{name}\": obrys musi mieć co najmniej 3 punkty.",
         "export_sheet_geo_missing": "Arkusz \"{name}\": brak współrzędnych geo dla punktów obrysu.",
-        "export_sheet_imgkap_failed": "Arkusz \"{name}\": imgkap zwrócił błąd.",
+        "export_sheet_imgkap_failed": "Arkusz \"{name}\": eksport KAP nie powiódł się.",
         "export_sheet_imgkap_missing": "Nie znaleziono binarki imgkap: {path}",
         "export_summary": "Eksport zakończony. OK: {ok}, błędy: {fail}\nKatalog: {out}",
         "export_progress_title": "Eksport KAP",
@@ -180,9 +175,9 @@ TRANSLATIONS = {
         "export_cancelled": "Eksport przerwany przez użytkownika ({done}/{total}).\nKatalog: {out}",
         "settings_dialog_title": "Ustawienia programu",
         "settings_field_language": "Język",
-        "settings_field_imgkap_path": "Ścieżka do binarki imgkap",
+        "settings_field_imgkap_path": "Eksporter KAP (`python` lub ścieżka imgkap)",
         "settings_field_sounding_datum": "KAP soundingDatum",
-        "settings_field_imgkap_work_dir": "Katalog debug imgkap (tmp+log)",
+        "settings_field_imgkap_work_dir": "Katalog debug eksportu KAP (tmp+log)",
         "settings_lang_pl": "Polski",
         "settings_lang_en": "English",
         "settings_field_outline_width": "Grubość obrysu",
@@ -306,7 +301,7 @@ TRANSLATIONS = {
         "export_sheet_scale_invalid": "Sheet \"{name}\": invalid scale \"{scale}\".",
         "export_sheet_corners_missing": "Sheet \"{name}\": crop outline must have at least 3 points.",
         "export_sheet_geo_missing": "Sheet \"{name}\": missing geo coordinates for outline points.",
-        "export_sheet_imgkap_failed": "Sheet \"{name}\": imgkap returned an error.",
+        "export_sheet_imgkap_failed": "Sheet \"{name}\": KAP export failed.",
         "export_sheet_imgkap_missing": "imgkap executable not found: {path}",
         "export_summary": "Export finished. OK: {ok}, errors: {fail}\nDirectory: {out}",
         "export_progress_title": "KAP export",
@@ -317,9 +312,9 @@ TRANSLATIONS = {
         "export_cancelled": "Export canceled by user ({done}/{total}).\nDirectory: {out}",
         "settings_dialog_title": "Application settings",
         "settings_field_language": "Language",
-        "settings_field_imgkap_path": "Path to imgkap executable",
+        "settings_field_imgkap_path": "KAP exporter (`python` or imgkap path)",
         "settings_field_sounding_datum": "KAP soundingDatum",
-        "settings_field_imgkap_work_dir": "imgkap debug directory (tmp+log)",
+        "settings_field_imgkap_work_dir": "KAP export debug directory (tmp+log)",
         "settings_lang_pl": "Polish",
         "settings_lang_en": "English",
         "settings_field_outline_width": "Outline width",
@@ -1947,7 +1942,7 @@ class MainWindow(QMainWindow):
             return
 
         new_lang = lang_combo.currentData()
-        new_imgkap_path = imgkap_path_edit.text().strip() or "imgkap"
+        new_imgkap_path = imgkap_path_edit.text().strip() or "python"
         new_imgkap_work_dir = imgkap_work_dir_edit.text().strip()
         new_sounding_datum = sounding_datum_edit.text().strip() or "UNKNOWN"
         new_settings = DisplaySettings(
