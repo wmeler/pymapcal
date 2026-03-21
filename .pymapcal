@@ -1,6 +1,7 @@
 {
   "language": "pl",
-  "imgkap_path": "/home/womeler/imgkap/imgkap",
+  "_comment": "Przelaczone z zewnetrznego imgkap na wbudowany backend Pythona.",
+  "imgkap_path": "python",
   "imgkap_work_dir": "/home/womeler/imgkap/tmp/pymapcal",
   "kap_sounding_datum": "UNKNOWN",
   "display": {
