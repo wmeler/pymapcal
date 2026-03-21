@@ -14,6 +14,23 @@ python3 main.py
 
 Możesz też podać ścieżkę jako pierwszy argument pozycyjny, np. `python3 main.py ./scan.tif`, `python3 main.py ./arkusz.map` albo `python3 main.py ./projekt.json`.
 
+## Build PyInstaller
+Linux/macOS:
+```bash
+python3 -m venv venv
+./venv/bin/pip install -r requirements-build.txt
+./build_pyinstaller.sh
+```
+
+Windows:
+```bat
+py -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements-build.txt
+build_pyinstaller.bat
+```
+
+Gotowy build pojawi się w `./dist/pymapcal/`.
+
 ## Obsługa
 1. `Plik -> Dodaj skan mapy` (tif/tiff/bmp/png/jpg/jpeg).
    - lub `Plik -> Importuj MAP...` aby zaimportować kalibrację z plików OziExplorer `.map`.

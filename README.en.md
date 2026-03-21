@@ -14,6 +14,23 @@ python3 main.py
 
 You can also pass a path as the first positional argument, for example `python3 main.py ./scan.tif`, `python3 main.py ./sheet.map`, or `python3 main.py ./project.json`.
 
+## PyInstaller Build
+Linux/macOS:
+```bash
+python3 -m venv venv
+./venv/bin/pip install -r requirements-build.txt
+./build_pyinstaller.sh
+```
+
+Windows:
+```bat
+py -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements-build.txt
+build_pyinstaller.bat
+```
+
+The bundled app will be created in `./dist/pymapcal/`.
+
 ## Usage
 1. `File -> Add map scan` (`tif/tiff/bmp/png/jpg/jpeg`).
    - or `File -> Import MAP...` to import calibration from OziExplorer `.map` files.

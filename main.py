@@ -47,6 +47,16 @@ from geo_positioning import (
     snap_calibration_position,
 )
 
+
+def app_base_path() -> Path:
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(meipass)
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
 TRANSLATIONS = {
     "pl": {
         "settings_json_object": "Plik .pymapcal musi być obiektem JSON.",
@@ -1977,7 +1987,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(self.tr("settings_save_ok", path=str(settings_path)))
 
     def show_readme_help(self) -> None:
-        base = Path(__file__).resolve().parent
+        base = app_base_path()
         if self.lang == "en":
             preferred = base / "README.en.md"
         else:
